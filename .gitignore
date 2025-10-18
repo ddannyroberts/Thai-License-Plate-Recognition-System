@@ -1,0 +1,113 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache
+*.cache
+.cache/
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Uploads (user generated files)
+uploads/originals/*
+uploads/plates/*
+!uploads/originals/.gitkeep
+!uploads/plates/.gitkeep
+
+# Training outputs (generated)
+runs/
+wandb/
+
+# Datasets (too large for git)
+datasets/
+
+# Models (can be large, optional to track)
+# Uncomment if models are too large for git:
+# models/*.pt
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Test files
+plate.png
+test_*.jpg
+test_*.png
+
+# ZIP archives
+*.zip
+*.tar.gz
+*.rar
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Compiled files
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Coverage
+.coverage
+htmlcov/
+
+# Docker
+.dockerignore
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Datasets (too large for Git)
+datasets/
+
+# ZIP archives
+*.zip

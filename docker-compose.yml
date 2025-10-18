@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      USE_LOCAL_MODEL: "true"
+      DETECTOR_WEIGHTS: ${DETECTOR_WEIGHTS:-models/detector/best.pt}
+      READER_WEIGHTS: ${READER_WEIGHTS:-models/reader/best.pt}
+
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"
+
+      # ใช้ TCP bridge (socat) แทนการ map อุปกรณ์จริง
+      SERIAL_ENABLED: "true"
+      SERIAL_PORT: "socket://host.docker.internal:3333"
+      SERIAL_BAUD: ${SERIAL_BAUD:-115200}
+      
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    # อย่าใส่ devices: บน macOS (ลบทิ้ง)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  db_data:

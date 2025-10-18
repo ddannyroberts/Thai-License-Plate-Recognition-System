@@ -1,0 +1,12 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+pydantic==2.8.2
+SQLAlchemy==2.0.35
+psycopg[binary]==3.2.3
+python-dotenv==1.0.1
+opencv-python==4.11.0.86
+pytesseract==0.3.13
+pyserial==3.5
+ultralytics==8.3.32
+inference-sdk==0.9.9

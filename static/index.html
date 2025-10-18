@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚗 Thai License Plate Recognition System</title>
+    <meta name="description" content="Advanced AI-powered Thai license plate recognition system with real-time detection and Arduino gate control">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <h1>🚗 Thai License Plate Recognition</h1>
+                <p class="header-subtitle">AI-Powered Detection System</p>
+            </div>
+            <div class="user-info">
+                <span id="username">Guest</span>
+                <button id="logoutBtn" class="btn btn-secondary" style="display:none;">Logout</button>
+            </div>
+        </header>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal">
+            <div class="modal-content">
+                <h2>เข้าสู่ระบบ</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>ชื่อผู้ใช้:</label>
+                        <input type="text" id="loginUsername" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label>รหัสผ่าน:</label>
+                        <input type="password" id="loginPassword" required autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
+                </form>
+                <p class="hint">ยังไม่มีบัญชี? <a href="#" id="showRegister" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">สมัครสมาชิก</a></p>
+                <div id="loginError" style="display:none; margin-top: 15px; padding: 10px; background: #fee; border-radius: 8px; color: var(--danger-color); text-align: center;"></div>
+            </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div id="registerModal" class="modal">
+            <div class="modal-content">
+                <h2>สมัครสมาชิก</h2>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label>ชื่อผู้ใช้:</label>
+                        <input type="text" id="registerUsername" required autocomplete="username" minlength="3">
+                        <small style="color: var(--text-light);">อย่างน้อย 3 ตัวอักษร</small>
+                    </div>
+                    <div class="form-group">
+                        <label>อีเมล:</label>
+                        <input type="email" id="registerEmail" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label>รหัสผ่าน:</label>
+                        <input type="password" id="registerPassword" required autocomplete="new-password" minlength="6">
+                        <small style="color: var(--text-light);">อย่างน้อย 6 ตัวอักษร</small>
+                    </div>
+                    <div class="form-group">
+                        <label>ยืนยันรหัสผ่าน:</label>
+                        <input type="password" id="registerConfirmPassword" required autocomplete="new-password" minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary">สมัครสมาชิก</button>
+                </form>
+                <p class="hint">มีบัญชีอยู่แล้ว? <a href="#" id="showLogin" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">เข้าสู่ระบบ</a></p>
+                <div id="registerError" style="display:none; margin-top: 15px; padding: 10px; background: #fee; border-radius: 8px; color: var(--danger-color); text-align: center;"></div>
+                <div id="registerSuccess" style="display:none; margin-top: 15px; padding: 10px; background: #efe; border-radius: 8px; color: var(--success-color); text-align: center;"></div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="upload">📤 Upload</button>
+            <button class="tab-btn" data-tab="records">📊 Records</button>
+            <button class="tab-btn admin-only" data-tab="admin" style="display:none;">⚙️ Admin</button>
+        </nav>
+
+        <!-- Upload Tab -->
+        <div id="upload" class="tab-content active">
+            <div class="upload-section">
+                <h2>📤 Upload Image or Video | 📷 Real-time Camera</h2>
+                
+                <div class="upload-type-selector">
+                    <label>
+                        <input type="radio" name="uploadType" value="file" checked> File Upload
+                    </label>
+                    <label>
+                        <input type="radio" name="uploadType" value="camera"> Live Camera
+                    </label>
+                </div>
+
+                <!-- Camera Section -->
+                <div id="cameraSection" style="display:none;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <button id="cameraBtn" class="btn btn-secondary">📷 Open Camera</button>
+                        <p style="color: var(--text-light); margin-top: 10px;">
+                            ⚡ Real-time detection every 2 seconds
+                        </p>
+                    </div>
+                    
+                    <video id="cameraPreview" autoplay playsinline></video>
+                    
+                    <div id="cameraDetections">
+                        <h3 style="text-align: center; margin: 20px 0;">Recent Detections</h3>
+                    </div>
+                </div>
+
+                <!-- File Upload Section -->
+                <div id="fileUploadSection">
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+                        <p>📁 Click to select or drag & drop file here</p>
+                        <small>Supported: JPG, PNG, MP4, AVI</small>
+                    </div>
+
+                    <div id="preview" style="display:none;">
+                        <h3>Preview:</h3>
+                        <img id="imagePreview" style="max-width: 100%; display:none; border-radius: 12px;">
+                        <video id="videoPreview" controls style="max-width: 100%; display:none; border-radius: 12px;"></video>
+                    </div>
+
+                    <button id="uploadBtn" class="btn btn-primary" style="display:none;">🚀 Process</button>
+
+                    <div id="result" style="display:none;">
+                        <h3>Result:</h3>
+                        <div class="result-card">
+                            <p><strong>Plate Text:</strong> <span id="plateText"></span></p>
+                            <p><strong>Province:</strong> <span id="provinceText"></span></p>
+                            <p><strong>Confidence:</strong> <span id="confidence"></span>%</p>
+                            <p><strong>Gate Status:</strong> <span id="gateStatus"></span></p>
+                        </div>
+                    </div>
+
+                    <div id="loading" style="display:none;">
+                        <div class="loader"></div>
+                        <p>Processing...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Records Tab -->
+        <div id="records" class="tab-content">
+            <h2>Detection Records</h2>
+            <div class="controls">
+                <input type="text" id="searchInput" placeholder="🔍 Search by plate...">
+                <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+            </div>
+            <div class="table-container">
+                <table id="recordsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>รูปป้าย</th>
+                            <th>Plate Text</th>
+                            <th>Province</th>
+                            <th>Confidence</th>
+                            <th>Date/Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recordsBody">
+                        <tr>
+                            <td colspan="6" class="text-center">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <button id="prevPage" class="btn btn-secondary">← Previous</button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button id="nextPage" class="btn btn-secondary">Next →</button>
+            </div>
+        </div>
+
+        <!-- Admin Tab -->
+        <div id="admin" class="tab-content admin-only">
+            <h2>⚙️ Admin Dashboard</h2>
+            
+            <div class="admin-grid">
+                <!-- Statistics -->
+                <div class="admin-card">
+                    <h3>📈 Statistics</h3>
+                    <div class="stat-item">
+                        <span>Total Records:</span>
+                        <strong id="totalRecords">0</strong>
+                    </div>
+                    <div class="stat-item">
+                        <span>Today's Detections:</span>
+                        <strong id="todayRecords">0</strong>
+                    </div>
+                    <div class="stat-item">
+                        <span>Average Confidence:</span>
+                        <strong id="avgConfidence">0%</strong>
+                    </div>
+                </div>
+
+                <!-- Gate Control -->
+                <div class="admin-card">
+                    <h3>🚪 Gate Control</h3>
+                    <div class="gate-status">
+                        <p>Status: <span id="gateConnectionStatus" class="status-badge disconnected">Disconnected</span></p>
+                    </div>
+                    <button id="testGateBtn" class="btn btn-primary">Test Gate Open</button>
+                    <button id="forceCloseBtn" class="btn btn-secondary">Force Close</button>
+                </div>
+
+                <!-- Settings -->
+                <div class="admin-card">
+                    <h3>⚙️ Settings</h3>
+                    <div class="form-group">
+                        <label>Gate Mode:</label>
+                        <select id="gateMode">
+                            <option value="every_record">Open on Every Detection</option>
+                            <option value="per_plate_cooldown">Cooldown per Plate</option>
+                            <option value="whitelist">Whitelist Only</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cooldown (seconds):</label>
+                        <input type="number" id="cooldown" value="10" min="0">
+                    </div>
+                    <button id="saveSettingsBtn" class="btn btn-primary">💾 Save Settings</button>
+                </div>
+
+                <!-- Data Management -->
+                <div class="admin-card">
+                    <h3>🗑️ Data Management</h3>
+                    <button id="exportDataBtn" class="btn btn-secondary">📥 Export CSV</button>
+                    <button id="clearOldDataBtn" class="btn btn-danger">🗑️ Clear Old Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Updates -->
+        <div id="realtimePanel" class="realtime-panel">
+            <h4>🔴 Real-time Updates <span id="wsStatus" class="status-badge disconnected">Disconnected</span></h4>
+            <div id="realtimeLog"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Toggle between file upload and camera
+        document.querySelectorAll('input[name="uploadType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'camera') {
+                    document.getElementById('cameraSection').style.display = 'block';
+                    document.getElementById('fileUploadSection').style.display = 'none';
+                } else {
+                    document.getElementById('cameraSection').style.display = 'none';
+                    document.getElementById('fileUploadSection').style.display = 'block';
+                    // Stop camera if active
+                    if (typeof stopCamera === 'function') {
+                        stopCamera();
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
