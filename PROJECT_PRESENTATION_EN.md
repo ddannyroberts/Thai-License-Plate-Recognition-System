@@ -29,7 +29,7 @@
 An automatic system that reads Thai motorcycle license plates using AI.
 
 ### **Input:**
-- 📸 Photo of a license plate (Upload or Live Camera)
+- 📸 Photo of a license plate (Upload)
 
 ### **What it does:**
 - 🤖 AI reads the plate using YOLO + Tesseract OCR
@@ -97,7 +97,6 @@ Photo of motorcycle
 ### **4. Make it Actually Work**
 - ✅ Easy-to-use web interface
 - ✅ Works on mobile & desktop
-- ✅ Live camera detection
 - ✅ Save all records
 
 ---
@@ -224,21 +223,21 @@ CREATE TABLE users (
 ### **HTML + JavaScript + CSS**
 
 ```javascript
-// Live Camera Feature
-navigator.mediaDevices.getUserMedia({ 
-    video: { facingMode: 'environment' } 
+// File Upload Feature
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+
+fetch('/detect', {
+    method: 'POST',
+    body: formData
 })
-.then(stream => {
-    video.srcObject = stream;
-    // Take photo every 2 seconds
-    setInterval(captureAndDetect, 2000);
-});
+.then(response => response.json())
+.then(result => displayResult(result));
 ```
 
 **Features:**
 - ✅ Upload file
-- ✅ Live camera (phone/webcam)
-- ✅ Real-time results
+- ✅ Real-time results (WebSocket)
 - ✅ Works on mobile
 - ✅ Admin page
 
@@ -381,17 +380,15 @@ Speed: 115200 baud
 ┌────────────────────────────────────┐
 │  Thai LPR System                   │
 ├────────────────────────────────────┤
-│  [Choose File] [Live Camera]       │
+│  [Choose File]                     │
 │                                    │
-│  📁 Upload a photo or              │
-│  📷 Use camera for live reading    │
+│  📁 Upload a photo                 │
+│  🔍 Click Detect to read           │
 └────────────────────────────────────┘
 ```
 
 **What you can do:**
 - ✅ Upload photo (JPEG, PNG)
-- ✅ Use live camera
-- ✅ Auto-detect every 2 seconds
 - ✅ See results instantly
 
 ---
@@ -452,29 +449,6 @@ Features:
 │  GATE_TRIGGER_MODE: cooldown        │
 └────────────────────────────────────┘
 ```
-
----
-
-## 🎥 **Live Camera**
-
-### **How it works:**
-```javascript
-1. Ask permission to use camera
-2. getUserMedia() → Camera opens
-3. Show video on screen
-4. Every 2 seconds:
-   - Take a photo
-   - Convert to JPEG
-   - Send to /detect
-   - Show result
-5. Keep going until stopped
-```
-
-**Works on:**
-- ✅ Desktop webcam
-- ✅ Phone front camera
-- ✅ Phone back camera
-- ✅ Auto-focus
 
 ---
 
@@ -777,10 +751,10 @@ ipconfig  # Windows
 ```
 Open Safari/Chrome on phone
 → Type: http://192.168.1.100:8000
-→ Click "Live Camera"
-→ Allow camera access
-→ Point at license plate
-→ System reads automatically
+→ Click "Choose File"
+→ Select photo
+→ Click "Detect Plate"
+→ See results
 ```
 
 ---
@@ -933,7 +907,6 @@ Unknown: Regular vehicles → ask permission
 - ✅ Trained 2 AI models (Detector + Reader)
 - ✅ Built full web application
 - ✅ Connected Arduino hardware
-- ✅ Made live camera work
 - ✅ Added database & login
 
 ### **Learning:**

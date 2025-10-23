@@ -29,7 +29,7 @@
 ระบบอ่านป้ายทะเบียนรถมอเตอร์ไซค์ไทยอัตโนมัติ โดยใช้ AI
 
 ### **Input:**
-- 📸 รูปถ่ายป้ายทะเบียน (Upload หรือ Live Camera)
+- 📸 รูปถ่ายป้ายทะเบียน (Upload)
 
 ### **Process:**
 - 🤖 AI ประมวลผลด้วย YOLO + Tesseract OCR
@@ -97,7 +97,6 @@
 ### **4. สร้างระบบที่ใช้งานได้จริง**
 - ✅ Web UI ใช้งานง่าย
 - ✅ รองรับ Mobile & Desktop
-- ✅ Live Camera Detection
 - ✅ บันทึกข้อมูลครบถ้วน
 
 ---
@@ -224,20 +223,20 @@ CREATE TABLE users (
 ### **HTML + JavaScript + CSS**
 
 ```javascript
-// Live Camera Feature
-navigator.mediaDevices.getUserMedia({ 
-    video: { facingMode: 'environment' } 
+// File Upload Feature
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+
+fetch('/detect', {
+    method: 'POST',
+    body: formData
 })
-.then(stream => {
-    video.srcObject = stream;
-    // Auto-capture every 2 seconds
-    setInterval(captureAndDetect, 2000);
-});
+.then(response => response.json())
+.then(result => displayResult(result));
 ```
 
 **Features:**
 - ✅ File Upload
-- ✅ Live Camera (getUserMedia API)
 - ✅ Real-time Results (WebSocket)
 - ✅ Responsive Design
 - ✅ Admin Dashboard
@@ -384,17 +383,15 @@ Baud Rate: 115200
 ┌────────────────────────────────────┐
 │  Thai LPR System                   │
 ├────────────────────────────────────┤
-│  [Choose File] [Live Camera]       │
+│  [Choose File]                     │
 │                                    │
-│  📁 Upload รูป หรือ               │
-│  📷 เปิดกล้องเพื่ออ่านแบบ Live    │
+│  📁 Upload รูปป้ายทะเบียน         │
+│  🔍 กดปุ่ม Detect เพื่ออ่าน       │
 └────────────────────────────────────┘
 ```
 
 **Features:**
 - ✅ File upload (JPEG, PNG)
-- ✅ Live camera (Desktop/Mobile)
-- ✅ Auto-detect every 2 seconds
 - ✅ Show results instantly
 
 ---
@@ -455,29 +452,6 @@ Features:
 │  GATE_TRIGGER_MODE: per_plate_cd    │
 └────────────────────────────────────┘
 ```
-
----
-
-## 🎥 **Live Camera Feature**
-
-### **การทำงาน:**
-```javascript
-1. Request camera permission
-2. getUserMedia() → กล้องเปิด
-3. Display video stream
-4. setInterval(capture, 2000)
-   - Capture frame from video
-   - Convert to JPEG blob
-   - Send to /detect API
-   - Display result
-5. Repeat until stopped
-```
-
-**รองรับ:**
-- ✅ Desktop Webcam
-- ✅ Mobile Front Camera
-- ✅ Mobile Rear Camera (facingMode: 'environment')
-- ✅ Auto-focus
 
 ---
 
@@ -780,10 +754,10 @@ ipconfig  # Windows
 ```
 Safari/Chrome บนมือถือ
 → พิมพ์: http://192.168.1.100:8000
-→ กด "Live Camera"
-→ อนุญาตให้เข้าถึงกล้อง
-→ เอาไปจ่อป้ายทะเบียน
-→ ระบบจะอ่านอัตโนมัติ
+→ กด "Choose File"
+→ เลือกรูปป้ายทะเบียน
+→ กด "Detect Plate"
+→ ดูผลลัพธ์
 ```
 
 ---
@@ -936,7 +910,6 @@ Unknown: รถทั่วไป → แจ้งเตือน + ขออน
 - ✅ ฝึก AI Model 2 ตัว (Detector + Reader)
 - ✅ พัฒนา Full-stack Web Application
 - ✅ Arduino Hardware Integration
-- ✅ Real-time Camera Detection
 - ✅ Database & Authentication
 
 ### **Learning:**
