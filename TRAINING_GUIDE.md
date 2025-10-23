@@ -236,3 +236,4 @@ model.train(data='datasets/lpr_plate.v1i.yolov11/data.yaml', epochs=100, imgsz=6
 **GO! 🚀**
 
 
+

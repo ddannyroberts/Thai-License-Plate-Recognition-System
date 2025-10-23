@@ -4,6 +4,10 @@ from uuid import uuid4
 from datetime import datetime, timedelta
 from typing import List, Set, Tuple
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, StreamingResponse

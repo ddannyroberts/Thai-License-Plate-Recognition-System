@@ -1,14 +1,3 @@
-/*
- * Thai LPR Gate Control with WiFi/WebSocket Support
- * Arduino UNO/ESP8266/ESP32
- * 
- * Features:
- * - Serial command support (backward compatible)
- * - HTTP REST API support  
- * - WebSocket real-time control
- * - Servo motor control
- */
-
 #include <Servo.h>
 
 // ===== Configuration =====
@@ -157,5 +146,6 @@ void printStatus() {
  * - Use pyserial to send commands over USB
  * - Example: ser.write(b'OPEN\n')
  */
+
 
 
