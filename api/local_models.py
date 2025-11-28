@@ -24,7 +24,7 @@ def infer_detector(img):
     return out
 
 def infer_reader(img):
-    # คืนผลแบบ Roboflow-style {predictions:[{class/name, confidence, x,y,width,height}...]}
+    # คืนผลแบบ Roboflow-style {predictions:[{class/name, confidence, x,y,width,height,x1,y1,x2,y2}...]}
     res = _reader(img)[0]
     preds = []
     for b in res.boxes:
@@ -34,5 +34,16 @@ def infer_reader(img):
         conf = float(b.conf[0].item())
         cls_id = int(b.cls[0].item())
         cls_name = res.names.get(cls_id, str(cls_id))
-        preds.append({"class": cls_name, "confidence": conf, "x": x, "y": y, "width": w, "height": h})
+        preds.append({
+            "class": cls_name, 
+            "confidence": conf, 
+            "x": x, 
+            "y": y, 
+            "width": w, 
+            "height": h,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2
+        })
     return {"predictions": preds}

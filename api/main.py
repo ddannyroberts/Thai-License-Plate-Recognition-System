@@ -277,10 +277,26 @@ async def detect(
         img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     else:
         image_source = image_url
-        import urllib.request
-        resp = urllib.request.urlopen(image_url)
-        arr = np.asarray(bytearray(resp.read()), dtype=np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        # Support both regular image URLs and MJPEG streams (like DroidCam)
+        if "mjpegfeed" in image_url.lower() or "mjpeg" in image_url.lower():
+            # MJPEG stream - use VideoCapture to get a frame
+            cap = cv2.VideoCapture(image_url)
+            if cap.isOpened():
+                ret, img = cap.read()
+                cap.release()
+                if not ret or img is None:
+                    return JSONResponse(status_code=400, content={"detail": "Cannot read frame from MJPEG stream"})
+            else:
+                return JSONResponse(status_code=400, content={"detail": "Cannot connect to MJPEG stream. Check IP and Port."})
+        else:
+            # Regular image URL
+            try:
+                import urllib.request
+                resp = urllib.request.urlopen(image_url, timeout=5)
+                arr = np.asarray(bytearray(resp.read()), dtype=np.uint8)
+                img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            except Exception as e:
+                return JSONResponse(status_code=400, content={"detail": f"Cannot fetch image from URL: {str(e)}"})
 
     if img is None:
         return JSONResponse(status_code=400, content={"detail": "Cannot read image"})
@@ -336,10 +352,11 @@ async def detect(
 
     preds = rf.get("predictions", [])
     
-    # --- ใช้ OCR เป็นหลัก (Reader Model ไม่ได้เทรนมาอ่านตัวอักษร) ---
+    # --- Character Segmentation + OCR แต่ละตัวอักษร ---
     plate_text = ""
     province_text = ""
     conf = None
+    character_details = []
     
     # Get confidence from reader model (refined detection)
     if preds:
@@ -348,13 +365,28 @@ async def detect(
         except Exception:
             conf = None
     
-    # Run OCR on the cropped plate
+    # Method 1: Character Segmentation (แยกตัวอักษรทีละตัวก่อน OCR)
     try:
-        h_, w_ = img_for_ocr.shape[:2]
-        plate_text = _clean_text(run_ocr_on_bbox(img_for_ocr, 0, 0, w_, h_))
-        print(f"DEBUG OCR result: {plate_text}", flush=True)
+        from .character_segmentation import read_plate_by_characters
+        segmented_text, character_details = read_plate_by_characters(img_for_ocr)
+        
+        if segmented_text and len(segmented_text) >= 2:
+            plate_text = segmented_text
+            print(f"DEBUG Character Segmentation result: {plate_text} ({len(character_details)} chars)", flush=True)
+        else:
+            # Fallback to full OCR if segmentation failed
+            print("DEBUG: Character segmentation failed, falling back to full OCR", flush=True)
+            raise ValueError("Segmentation returned empty result")
+            
     except Exception as e:
-        print("DEBUG OCR error:", e, flush=True)
+        print(f"DEBUG Character segmentation error: {e}, using fallback OCR", flush=True)
+        # Method 2: Fallback to full OCR (traditional method)
+        try:
+            h_, w_ = img_for_ocr.shape[:2]
+            plate_text = _clean_text(run_ocr_on_bbox(img_for_ocr, 0, 0, w_, h_))
+            print(f"DEBUG Fallback OCR result: {plate_text}", flush=True)
+        except Exception as ocr_error:
+            print(f"DEBUG Fallback OCR error: {ocr_error}", flush=True)
 
     # --- Parse province from plate_text ---
     if plate_text and not province_text:
@@ -378,15 +410,42 @@ async def detect(
         plate_img_path = f"uploads/plates/{plate_img_filename}"
         cv2.imwrite(plate_img_path, img_for_ocr)
     
-    # --- Save DB FIRST ---
+    # --- Check if plate has been seen before ---
     db: Session = next(get_db())
+    normalized_plate = _normalize_plate(plate_text or "")
+    is_new_plate = True
+    seen_count = 1
+    first_seen_at = datetime.utcnow()
+    
+    if normalized_plate:
+        # Check if this plate (normalized) was seen before
+        existing_plate = db.query(PlateRecord).filter(
+            func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
+        ).order_by(PlateRecord.created_at.asc()).first()
+        
+        if existing_plate:
+            is_new_plate = False
+            first_seen_at = existing_plate.first_seen_at or existing_plate.created_at
+            # Count all records with same normalized plate
+            seen_count = db.query(func.count(PlateRecord.id)).filter(
+                func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
+            ).scalar() + 1
+    
+    # --- Save DB ---
     rec = PlateRecord(
         plate_text=plate_text or "",
         province_text=province_text or "",
         confidence=conf,
         image_path=(image_source if not used_crop else f"{image_source}#crop"),
         plate_image_path=plate_img_filename,
-        detections_json=json.dumps({"reader": rf, "detector": det_preds[:5]}, ensure_ascii=False)
+        detections_json=json.dumps({
+            "reader": rf, 
+            "detector": det_preds[:5],
+            "character_details": character_details
+        }, ensure_ascii=False),
+        is_new_plate=is_new_plate,
+        seen_count=seen_count,
+        first_seen_at=first_seen_at
     )
     db.add(rec)
     db.commit()
@@ -413,12 +472,16 @@ async def detect(
             # อย่าให้ API พังถ้า serial ล้มเหลว
             print("WARN serial:", e, flush=True)
 
-    return PlateCreateResponse(
-        id=rec.id,
-        plate_text=plate_text or "",
-        province_text=province_text or "",
-        confidence=conf
-    )
+    response_data = {
+        "id": rec.id,
+        "plate_text": plate_text or "",
+        "province_text": province_text or "",
+        "confidence": conf,
+        "is_new_plate": is_new_plate,
+        "seen_count": seen_count
+    }
+    
+    return PlateCreateResponse(**response_data)
 
 # =============================
 # /detect-video (optional)
@@ -518,10 +581,11 @@ async def detect_video(
             except: pass
             continue
 
-        # --- 3) Use OCR (Reader Model ไม่ได้เทรนมาอ่านตัวอักษร) ---
+        # --- 3) Character Segmentation + OCR ---
         preds = rf.get("predictions", [])
         plate_text, province_text = "", ""
         conf = None
+        character_details = []
         
         # Get confidence from reader model
         if preds:
@@ -530,10 +594,19 @@ async def detect_video(
             except Exception:
                 conf = None
         
-        # Run OCR on cropped plate
+        # Use Character Segmentation (แยกตัวอักษรทีละตัว)
         if crop.size > 0:
             try:
-                plate_text = _clean_text(run_ocr_on_bbox(crop, 0, 0, crop.shape[1], crop.shape[0]))
+                from .character_segmentation import read_plate_by_characters
+                segmented_text, character_details = read_plate_by_characters(crop)
+                
+                if segmented_text and len(segmented_text) >= 2:
+                    plate_text = segmented_text
+                    print(f"DEBUG video Character Segmentation: {plate_text} ({len(character_details)} chars)", flush=True)
+                else:
+                    # Fallback to full OCR
+                    plate_text = _clean_text(run_ocr_on_bbox(crop, 0, 0, crop.shape[1], crop.shape[0]))
+                    print(f"DEBUG video Fallback OCR: {plate_text}", flush=True)
                 
                 # Parse province from plate text
                 if plate_text:
@@ -541,9 +614,13 @@ async def detect_video(
                     if parsed["province_code"]:
                         province_text = parsed["province_name"]
                         plate_text = parsed["formatted_text"]
-                    print(f"DEBUG video OCR: {plate_text}, Province: {province_text}", flush=True)
+                    print(f"DEBUG video parsed: {plate_text}, Province: {province_text}", flush=True)
             except Exception as e:
-                print(f"DEBUG video OCR error: {e}", flush=True)
+                print(f"DEBUG video OCR error: {e}, trying fallback", flush=True)
+                try:
+                    plate_text = _clean_text(run_ocr_on_bbox(crop, 0, 0, crop.shape[1], crop.shape[0]))
+                except Exception as e2:
+                    print(f"DEBUG video fallback OCR also failed: {e2}", flush=True)
         
         # Skip if no text detected
         if not plate_text or len(plate_text) < 2:
@@ -650,7 +727,9 @@ async def get_records(page: int = 1, limit: int = 20):
                 "province_text": r.province_text,
                 "confidence": r.confidence,
                 "plate_image": f"/uploads/plates/{r.plate_image_path}" if r.plate_image_path else None,
-                "created_at": r.created_at.isoformat() if r.created_at else None
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "is_new_plate": getattr(r, 'is_new_plate', True),
+                "seen_count": getattr(r, 'seen_count', 1)
             }
             for r in records
         ],
@@ -729,6 +808,66 @@ async def close_gate():
         return {"message": "Close command sent successfully"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
+
+@app.get("/api/plates/status")
+async def get_plate_status():
+    """Get plate status counts (new vs duplicate)"""
+    db: Session = next(get_db())
+    
+    # Count new plates (is_new_plate = True)
+    new_plates_count = db.query(func.count(PlateRecord.id)).filter(
+        PlateRecord.is_new_plate == True
+    ).scalar() or 0
+    
+    # Count duplicate plates (is_new_plate = False)
+    duplicate_plates_count = db.query(func.count(PlateRecord.id)).filter(
+        PlateRecord.is_new_plate == False
+    ).scalar() or 0
+    
+    # Total unique plates (plates where seen_count = 1 or first_seen_at matches)
+    total_plates = db.query(func.count(func.distinct(PlateRecord.plate_text))).filter(
+        PlateRecord.plate_text != ""
+    ).scalar() or 0
+    
+    # Get new plates (first occurrence only)
+    new_plates = db.query(PlateRecord).filter(
+        PlateRecord.is_new_plate == True
+    ).order_by(desc(PlateRecord.created_at)).limit(50).all()
+    
+    # Get duplicate plates (recent duplicates)
+    duplicate_plates = db.query(PlateRecord).filter(
+        PlateRecord.is_new_plate == False
+    ).order_by(desc(PlateRecord.created_at)).limit(50).all()
+    
+    return {
+        "new_plates_count": new_plates_count,
+        "duplicate_plates_count": duplicate_plates_count,
+        "total_unique_plates": total_plates,
+        "new_plates": [
+            {
+                "id": r.id,
+                "plate_text": r.plate_text,
+                "province_text": r.province_text,
+                "confidence": r.confidence,
+                "plate_image": f"/uploads/plates/{r.plate_image_path}" if r.plate_image_path else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "seen_count": getattr(r, 'seen_count', 1)
+            }
+            for r in new_plates
+        ],
+        "duplicate_plates": [
+            {
+                "id": r.id,
+                "plate_text": r.plate_text,
+                "province_text": r.province_text,
+                "confidence": r.confidence,
+                "plate_image": f"/uploads/plates/{r.plate_image_path}" if r.plate_image_path else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "seen_count": getattr(r, 'seen_count', 1)
+            }
+            for r in duplicate_plates
+        ]
+    }
 
 @app.post("/api/settings")
 async def save_settings(settings: dict):

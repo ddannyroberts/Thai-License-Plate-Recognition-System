@@ -24,4 +24,7 @@ class PlateRecord(Base):
     image_path = Column(Text, nullable=True)  # Original uploaded image
     plate_image_path = Column(Text, nullable=True)  # Cropped plate image
     detections_json = Column(Text, nullable=True)
+    is_new_plate = Column(Boolean, default=True)  # True if first time seeing this plate, False if duplicate
+    seen_count = Column(Integer, default=1)  # Number of times this plate has been seen
+    first_seen_at = Column(DateTime(timezone=True), nullable=True)  # First time this plate was detected
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

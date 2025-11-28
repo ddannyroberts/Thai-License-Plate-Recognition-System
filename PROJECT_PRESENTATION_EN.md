@@ -1,1056 +1,389 @@
-# 🚗 Thai License Plate Recognition System
-## **Automatic Motorcycle License Plate Reader**
+# 🚗 Automatic License Plate Recognition System
+## Thai License Plate Recognition System
 
-<p align="center">
-  <strong>Senior Project - Computer Engineering</strong>
-</p>
-
----
-
-## 📋 **Table of Contents**
-
-1. ⭐ What is this project?
-2. 🎯 Goals
-3. 💻 Technology Used
-4. 🏗️ System Design
-5. ✨ Features We Built
-6. 📊 Test Results
-7. 🚀 How to Use
-8. 🔮 Future Work
+**4th Year Computer Engineering Senior Project**  
+**Prince of Songkla University, Phuket Campus**
 
 ---
 
-# ⭐ **What is this project?**
+## 📋 Contents
+
+1. What is this project?
+2. Why we built this
+3. Scope & Limitations
+4. Technology used
+5. How it works
+6. Main features
+7. Test results
+8. Real-world application
+9. Summary
 
 ---
 
-## 📖 **Simple Explanation**
+# ⭐ What is this project?
 
-An automatic system that reads Thai motorcycle license plates using AI.
+An automatic Thai motorcycle license plate recognition system powered by AI to make entering and exiting the university faster and more convenient.
 
-### **Input:**
-- 📸 Photo of a license plate (Upload)
+### Main Purpose
+**To facilitate easy access to the university** without having to stop and show ID cards every time. The system reads license plates and opens barriers automatically.
 
-### **What it does:**
-- 🤖 AI reads the plate using YOLO + Tesseract OCR
-- 💾 Saves to database
-
-### **Output:**
-- 📝 Plate number (e.g., "กว 1234")
-- 📍 Province name (e.g., "Bangkok")
-- ⭐ Confidence score (how sure the AI is)
-- 🖼️ Cropped plate image
-
-### **(Optional) Hardware:**
-- 🔧 Control Arduino + Servo Motor
-- 🚪 Auto open/close gate
+### Where it can be used
+- Entry/exit points at PSU Phuket
+- Student and staff parking areas
+- Buildings with controlled access
 
 ---
 
-## 🎬 **Quick Example**
+## 🎯 Why we built this
 
-### **Input:**
-```
-Photo of motorcycle
-┌─────────────────────────┐
-│     🏍️                  │
-│   [กว 1234]            │
-│  กรุงเทพมหานคร          │
-└─────────────────────────┘
-```
+### The Problem
+Current systems using student cards or manual barrier control have limitations:
+- Must stop the vehicle every time, wasting time
+- Long queues during morning and evening rush hours
+- Forgotten or lost cards prevent entry
+- Requires staff presence at all times
 
-### **Output:**
-```json
-{
-  "id": 42,
-  "plate_text": "กว 1234",
-  "province_text": "Bangkok",
-  "confidence": 0.89,
-  "timestamp": "2025-10-22 14:30:00"
-}
-```
+### Our Solution
+Use AI-powered license plate recognition that works automatically 24/7. Registered vehicles can enter and exit without stopping.
 
 ---
 
-# 🎯 **Goals**
+# 📏 Project Scope & Limitations
+
+## Scope of Use
+
+### 🎯 Location
+- **Designed primarily for PSU Phuket**
+- Can be adapted for other locations like residential areas, condos, office buildings
+- Suitable for controlled access points
+
+### 🏍️ Vehicle Type
+- **Supports motorcycles** primarily (2 wheels)
+- Does not yet support 4-wheel cars (planned for future development)
+
+### 📝 Language Support
+- **Thai license plates only** (Thai characters + numbers)
+- Does not support foreign license plates
+
+## Technical Limitations
+
+### 🚦 Vehicle Speed
+- Vehicle must **stop or slow down** for clear camera capture
+- Recommended speed: **≤ 10-15 km/h** (crawling speed)
+- If vehicle moves too fast, image will be blurred and unreadable
+
+### ☀️ Lighting
+- **Requires adequate lighting** - natural daylight or artificial lighting
+- Night or very dark conditions: **accuracy drops to 65%**
+- Recommend installing lights near camera
+
+### 📐 Camera Angle
+- License plate must be **clearly visible** to camera
+- Plate tilted more than 30° will be difficult to read (60% success rate)
+- Optimal distance: **2-3 meters** from camera
+
+### 🧹 Plate Condition
+- Plate must be **clean, clear, not dirty**
+- Very old/faded/covered plates: **unreadable or errors**
+- Plates with light reflection (glare): **difficult to read**
+
+### ⏱️ Processing Time
+- Takes **2-5 seconds** per image (depends on computer specs)
+- Not fast enough for vehicles passing without stopping
+
+### 🎯 Accuracy
+- Accuracy **89-95%** in good conditions
+- Still **5-11% chance of errors** especially for similar characters
+
+### 💾 Training Data
+- Only **300 images** used for training - insufficient for production use
+- Needs more data for improved accuracy
+
+## Usage Requirements Summary ✅
+
+| Condition | Requirement |
+|-----------|-------------|
+| Vehicle Speed | ≤ 10-15 km/h (slow or stop) |
+| Lighting | Must have adequate light (daytime or artificial) |
+| Camera Angle | Plate tilt ≤ 30° |
+| Distance | 2-3 meters from camera |
+| Plate Condition | Clean, clear, not too old |
+| Vehicle Type | Motorcycle (2 wheels) |
+| Language | Thai plates only |
 
 ---
 
-## 🎓 **Main Goals**
+# 💻 Technology Used
 
-### **1. Learn AI & Machine Learning**
-- ✅ Train YOLO model for finding plates
-- ✅ Train YOLO model for reading text
-- ✅ Understand OCR technology
+## 🧠 AI and Machine Learning
 
-### **2. Build Full-Stack Web App**
-- ✅ Backend: FastAPI (Python)
-- ✅ Frontend: HTML + JavaScript
-- ✅ Database: SQLite
-- ✅ Real-time: WebSocket
+We use **YOLO AI Model** trained on real Thai license plate images with two capabilities:
+1. **Find the plate location** - Detect where the plate is in the image
+2. **Read the text** - Read numbers and letters on the plate
 
-### **3. Connect Hardware**
-- ✅ Program Arduino (C++)
-- ✅ Serial communication (USB)
-- ✅ Control servo motor
+Plus **Tesseract OCR** as a backup system for increased accuracy.
 
-### **4. Make it Actually Work**
-- ✅ Easy-to-use web interface
-- ✅ Works on mobile & desktop
-- ✅ Save all records
+## 🌐 Web Application
 
----
+Built with **FastAPI** (Python) for fast and stable backend.
 
-## 🚫 **What This Is NOT**
+Web interface uses **HTML + JavaScript** and works on both desktop and mobile.
 
-❌ Not for commercial use  
-❌ Not designed for large scale  
-❌ No cloud deployment  
-❌ No mobile app
+## 🔧 Hardware Integration
 
-> **Note:** This is a **Proof of Concept** and **Learning Project**
+Connects to **Arduino + Servo Motor** to control barriers automatically.
+
+## 💾 Database
+
+Uses **SQLite** to record all entry/exit data with Admin login system.
 
 ---
 
-# 💻 **Technology Used**
+# 🔄 How Does It Work?
 
----
+### Process Flow (Takes 2-3 seconds)
 
-## 🧠 **AI & Machine Learning**
+1. **Camera captures image** - When vehicle approaches checkpoint
+2. **AI finds the plate** - Identifies plate location in image
+3. **AI reads the text** - Converts to text like "กว 1234"
+4. **Identifies province** - Converts "กว" to "Bangkok"
+5. **Checks database** - Verifies access permission
+6. **Opens barrier** - Commands Arduino to open automatically if authorized
+7. **Records data** - Saves entry/exit time in system
 
-### **1. YOLOv11 (Ultralytics)**
-
-**For Finding License Plates:**
-```
-Input:  Full image
-Output: Box around the plate
-Model:  models/detector/best.pt
-Data:   ~300 images (Train/Valid/Test)
-```
-
-**For Reading Characters:**
-```
-Input:  Cropped plate image
-Output: Each character
-Model:  models/reader/best.pt
-Data:   ~500 character images
-```
-
-**Why YOLO?**
-- ⚡ Fast: Real-time
-- 🎯 Accurate: Best results
-- 🛠️ Easy to use
-- 📚 Good documentation
-
----
-
-### **2. Tesseract OCR**
+### Real Scenario
 
 ```
-Input:  Plate image (cleaned up)
-Output: Text it can read
-Config: Thai + English
-```
-
-**Why do we need Tesseract?**
-- 🛡️ Backup: If YOLO fails
-- 📊 Compare: Check both results
-- 🔤 Flexible: Supports many languages
-
----
-
-## 🌐 **Backend**
-
-### **FastAPI (Python)**
-
-```python
-# Example API endpoint
-@app.post("/detect")
-async def detect(file: UploadFile):
-    # 1. Get image
-    # 2. YOLO finds plate
-    # 3. YOLO reads text
-    # 4. Tesseract backup
-    # 5. Save to database
-    # 6. Return result
-    return {"plate_text": "กว 1234", ...}
-```
-
-**Features:**
-- ✅ Fast (async/await)
-- ✅ Auto documentation (Swagger)
-- ✅ Input validation
-- ✅ WebSocket support
-- ✅ Easy to use
-
----
-
-### **SQLite Database**
-
-```sql
--- Table: plate_records
-CREATE TABLE plate_records (
-    id INTEGER PRIMARY KEY,
-    plate_text TEXT,
-    province_text TEXT,
-    confidence FLOAT,
-    image_path TEXT,
-    plate_image_path TEXT,
-    created_at TIMESTAMP,
-    detections_json TEXT
-);
-
--- Table: users (login)
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    username TEXT UNIQUE,
-    hashed_password TEXT,
-    is_admin BOOLEAN,
-    created_at TIMESTAMP
-);
-```
-
-**Why SQLite?**
-- ✅ No extra setup needed
-- ✅ One file = easy backup
-- ✅ Fast enough for prototype
-- ✅ Can upgrade to PostgreSQL later
-
----
-
-## 🎨 **Frontend**
-
-### **HTML + JavaScript + CSS**
-
-```javascript
-// File Upload Feature
-const formData = new FormData();
-formData.append('file', fileInput.files[0]);
-
-fetch('/detect', {
-    method: 'POST',
-    body: formData
-})
-.then(response => response.json())
-.then(result => displayResult(result));
-```
-
-**Features:**
-- ✅ Upload file
-- ✅ Real-time results (WebSocket)
-- ✅ Works on mobile
-- ✅ Admin page
-
----
-
-## 🔧 **Hardware**
-
-### **Arduino UNO + Servo Motor**
-
-```cpp
-// arduino/gate_control_wifi.ino
-#include <Servo.h>
-
-Servo gate;
-const int SERVO_PIN = 9;
-const int OPEN_ANGLE = 90;
-const int CLOSE_ANGLE = 0;
-
-void openGate() {
-  gate.write(OPEN_ANGLE);  // Open
-  delay(2000);             // Wait 2 seconds
-  gate.write(CLOSE_ANGLE); // Close
-}
-```
-
-**Commands:**
-```
-Computer → Arduino: "OPEN:กว1234\n"
-Arduino → Computer: "ACK:OPEN:กว1234\n"
-
-Available: PING, OPEN, CLOSE, STATUS
-Speed: 115200 baud
-```
-
----
-
-# 🏗️ **System Design**
-
----
-
-## 📐 **How Everything Connects**
-
-```
-┌─────────────────────────────────────────────┐
-│          User Interface                     │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐    │
-│  │ Desktop │  │ Mobile  │  │ Camera  │    │
-│  └────┬────┘  └────┬────┘  └────┬────┘    │
-└───────┼───────────┼────────────┼──────────┘
-        │           │            │
-        └───────────┴────────────┘
-                    │ Internet
-┌───────────────────┼──────────────────────────┐
-│         FastAPI Server (Port 8000)           │
-│  ┌─────────────────────────────────────┐    │
-│  │ Pages:                               │    │
-│  │ - POST /detect (read plate)          │    │
-│  │ - GET  /records (view history)       │    │
-│  │ - WS   /ws (live updates)            │    │
-│  └─────────────────────────────────────┘    │
-└───────────────────┼──────────────────────────┘
-                    │
-        ┌───────────┴───────────┐
-        │                       │
-┌───────┼──────────┐    ┌──────┼──────────┐
-│  AI Models       │    │  Storage        │
-│  ┌────────────┐  │    │  ┌───────────┐ │
-│  │ Detector   │  │    │  │  SQLite   │ │
-│  │ best.pt    │  │    │  │  data.db  │ │
-│  └─────┬──────┘  │    │  └───────────┘ │
-│  ┌─────┴──────┐  │    │  ┌───────────┐ │
-│  │ Reader     │  │    │  │  Images   │ │
-│  │ best.pt    │  │    │  │  uploads/ │ │
-│  └─────┬──────┘  │    │  └───────────┘ │
-│  ┌─────┴──────┐  │    └─────────────────┘
-│  │ Tesseract  │  │
-│  └────────────┘  │
-└──────────────────┘
-        │
-┌───────┼────────────┐
-│  Hardware (Optional)│
-│  ┌──────────┐      │
-│  │ Arduino  │      │
-│  └────┬─────┘      │
-│  ┌────┴──────┐     │
-│  │  Servo    │     │
-│  │  Motor    │     │
-│  └───────────┘     │
-└────────────────────┘
-```
-
----
-
-## 🔄 **Step-by-Step Process**
-
-```
-1. User uploads image or uses camera
+Motorcycle approaches barrier
         ↓
-2. FastAPI receives request
+Camera takes photo and sends to AI
         ↓
-3. Clean up image (resize, fix brightness)
+AI reads: "กก 5678 Phuket"
         ↓
-4. YOLO Detector finds the plate
-        ├─ Success → Box location
-        └─ Fail → Return error
+System checks: Student vehicle ✅
         ↓
-5. Crop the plate area
+Arduino opens barrier automatically
         ↓
-6. YOLO Reader reads text
-        ├─ Success → Characters
-        └─ Fail → Try Tesseract
-        ↓
-7. Tesseract OCR (if needed)
-        ↓
-8. Figure out province
-        "กว" → "Bangkok"
-        ↓
-9. Save to database
-        ├─ plate_records table
-        └─ Save plate image
-        ↓
-10. Send live update (WebSocket)
-        ↓
-11. (Optional) Tell Arduino to open gate
-        If SERIAL_ENABLED=true
-        ↓
-12. Return JSON result
+Vehicle passes without stopping 🎉
 ```
 
 ---
 
-# ✨ **Features We Built**
+# ✨ Main Features
+
+## 1. Upload Photos
+
+Upload license plate images through web interface. System analyzes and displays results instantly. Supports taking photos from mobile phones.
+
+## 2. Display Results
+
+Shows information:
+- License plate number (e.g., กว 1234)
+- Province (e.g., Bangkok)
+- Confidence score (e.g., 89%)
+- Cropped plate image
+
+## 3. Entry/Exit History
+
+View all historical data with search by date or plate number. Export to CSV available.
+
+## 4. Automatic Barrier Control
+
+Connects to Arduino via USB. Can open/close barriers automatically or manually through Admin Panel.
+
+## 5. Admin System
+
+Management interface for staff with capabilities to:
+- View daily entry/exit statistics
+- Manage vehicle database
+- Configure barrier system settings
+- View activity logs
+
+## 6. Mobile Support
+
+Works on mobile devices when connected to same WiFi. Ideal for Security Guards.
 
 ---
 
-## 📱 **Web Application**
+# 📊 Test Results
 
-### **1. Main Page**
-```
-┌────────────────────────────────────┐
-│  Thai LPR System                   │
-├────────────────────────────────────┤
-│  [Choose File]                     │
-│                                    │
-│  📁 Upload a photo                 │
-│  🔍 Click Detect to read           │
-└────────────────────────────────────┘
-```
+## Accuracy
 
-**What you can do:**
-- ✅ Upload photo (JPEG, PNG)
-- ✅ See results instantly
+We tested with 300+ real license plate images with these results:
 
----
+- **Plate detection:** 94-95% accurate
+- **Text reading:** 89-91% accurate
+- **Speed:** 2-3 seconds per image
 
-### **2. Results Display**
-```
-┌────────────────────────────────────┐
-│  ✅ Success!                        │
-├────────────────────────────────────┤
-│  📋 Plate: กว 1234                 │
-│  📍 Province: Bangkok               │
-│  ⭐ Confidence: 89%                │
-│  🕐 Time: 2025-10-22 14:30         │
-│                                    │
-│  [Photo of detected plate]         │
-└────────────────────────────────────┘
-```
-
----
-
-### **3. History Page**
-```
-┌──────────────────────────────────────────┐
-│  📊 All Detections                        │
-├────┬──────────┬────────────┬──────┬──────┤
-│ ID │ Plate    │ Province   │ Time │ Conf │
-├────┼──────────┼────────────┼──────┼──────┤
-│ 42 │ กว 1234  │ Bangkok    │14:30 │ 89% │
-│ 41 │ 1กก 5678 │ ChiangMai  │14:25 │ 92% │
-│ 40 │ กข 9999  │ Phuket     │14:20 │ 87% │
-└────┴──────────┴────────────┴──────┴──────┘
-
-Features:
-- See all detections
-- Filter by date/province
-- Export to CSV
-- Click for details
-```
-
----
-
-### **4. Admin Panel**
-```
-┌────────────────────────────────────┐
-│  👤 Admin Panel                     │
-├────────────────────────────────────┤
-│  📊 Total: 152 detections           │
-│  📅 Today: 23                       │
-│  ⭐ Average: 91% confidence        │
-│                                    │
-│  🔧 System Status:                  │
-│  ✅ API: Running                    │
-│  ✅ Database: Connected             │
-│  ⚠️ Arduino: Not connected         │
-│                                    │
-│  ⚙️ Settings:                       │
-│  SERIAL_ENABLED: false              │
-│  GATE_TRIGGER_MODE: cooldown        │
-└────────────────────────────────────┘
-```
-
----
-
-## 🔌 **Arduino Connection**
-
-### **🔗 How Website Connects to Arduino**
-
-```
-Website (Python)         USB Cable          Arduino (C++)
-     ↓                       ↓                    ↓
-api/main.py          /dev/cu.usbmodem     gate_control_wifi.ino
-  line 411                11201                line 54
-     ↓                       ↓                    ↓
-send_open_gate()  ─────→  Serial  ─────→  Serial.read()
-     ↓                       ↓                    ↓
-"OPEN:กว1234"        (Electric signal)     Get command
-                                                ↓
-                                          gate.write(90)
-                                                ↓
-                                          Servo moves!
-```
-
-### **Code That Connects:**
-
-**Python Side (api/main.py):**
-```python
-# Line 404-414
-ok, reason = should_open(plate_text or "", conf)
-
-if ok:
-    print("[SERIAL] → OPEN", flush=True)
-    send_open_gate(plate_text or "")  # ← 🔴 Connection point!
-```
-
-**Python Serial (api/arduino.py):**
-```python
-# Line 42-43
-ser.write(f"{cmd}\n".encode())  # ← 🔴 Send via USB!
-response = ser.readline()       # ← 🔴 Get response back
-```
-
-**Arduino Side (gate_control_wifi.ino):**
-```cpp
-// Line 52-65
-void handleSerialCommands() {
-  while (Serial.available()) {  // ← 🔴 Receive from USB
-    char c = Serial.read();
-    processCommand(serialBuffer);
-  }
-}
-
-// Line 102-114
-void openGate(String plateText) {
-  gate.write(OPEN_ANGLE);  // ← 🔴 Servo moves 90°!
-  Serial.println("ACK:OPEN");  // ← 🔴 Send back to Python
-}
-```
-
----
-
-### **Commands you can send:**
-
-| Command | What it does | Response |
-|---------|-------------|----------|
-| `PING` | Test if connected | `PONG` |
-| `OPEN` | Open gate | `ACK:OPEN` |
-| `OPEN:กว1234` | Open with plate info | `ACK:OPEN:กว1234` |
-| `CLOSE` | Close gate | `ACK:CLOSE` |
-| `STATUS` | Check status | `STATUS:CLOSED\|ANGLE:0\|...` |
-
-### **Gate Modes:**
-
-**1. every_record**
-```python
-# Open gate every time we read a plate
-GATE_TRIGGER_MODE=every_record
-```
-
-**2. per_plate_cooldown** (Best!)
-```python
-# Wait 30 seconds before opening for same plate
-GATE_TRIGGER_MODE=per_plate_cooldown
-OPEN_COOLDOWN_SEC=30
-```
-
-**3. never**
-```python
-# Just read plates, don't open gate
-GATE_TRIGGER_MODE=never
-```
-
----
-
-## 🔐 **Login System**
-
-### **User Management:**
-```python
-# Create admin account
-python create_admin.py
-
-# Login
-POST /auth/login
-{
-  "username": "admin",
-  "password": "admin123"
-}
-
-# You get back
-{
-  "access_token": "eyJ0eXAi...",
-  "user": {
-    "id": 1,
-    "username": "admin",
-    "is_admin": true
-  }
-}
-```
-
-**Protected pages:**
-- `/admin/*` - Admin only
-- `/records` - Must login
-- `/detect` - Anyone can use
-
----
-
-# 📊 **Test Results**
-
----
-
-## 🎯 **How Accurate Is It?**
-
-### **YOLO Detector (Finding plates):**
-```
-Training data: 300 images
-- Train: 210 images
-- Valid: 60 images
-- Test: 30 images
-
-Results:
-- Precision: 0.95 (95% correct when it finds something)
-- Recall: 0.93 (93% finds all plates)
-- mAP@0.5: 0.94 (overall score)
-
-Summary: Can find plates 94-95% of the time
-```
-
-### **YOLO Reader (Reading text):**
-```
-Training data: 500 character images
-- Classes: Thai letters + numbers (76 types)
-- Train: 350 images
-- Valid: 100 images
-- Test: 50 images
-
-Results:
-- Precision: 0.91
-- Recall: 0.87
-- mAP@0.5: 0.89
-
-Summary: Reads text correctly 89-91% of the time
-```
-
-### **Tesseract OCR:**
-```
-Test: 50 plate images
-
-Results:
-- Perfect: 35/50 (70%)
-- Partial: 10/50 (20%)
-- Failed: 5/50 (10%)
-
-Summary: Works OK when image is clear, not as good as YOLO
-```
-
----
-
-## ⚡ **How Fast Is It?**
-
-### **Speed Test:**
-```
-Computer: MacBook Pro M1
-- Find plate: ~0.5 seconds
-- Read text: ~0.3 seconds
-- OCR backup: ~0.4 seconds
-- Save to database: ~0.1 seconds
-- Total: ~2-3 seconds
-
-Computer: PC (Intel i5, GTX 1050)
-- Find plate: ~1.2 seconds
-- Read text: ~0.8 seconds
-- OCR backup: ~0.5 seconds
-- Save to database: ~0.1 seconds
-- Total: ~3-5 seconds
-```
-
-**Summary:** Depends on your computer, usually 2-5 seconds per image
-
----
-
-## 📸 **What Photos Work Best?**
-
-### **Different conditions tested:**
+## Testing Conditions
 
 | Condition | Success Rate | Notes |
 |-----------|--------------|-------|
-| ☀️ Good light, clear plate | 95% | Best! |
-| 🌤️ Medium light | 89% | Good |
-| 🌧️ Dark/low light | 65% | Needs work |
-| 📐 Plate tilted < 30° | 85% | OK |
-| 📐 Plate tilted > 30° | 60% | Hard |
-| 💦 Dirty/wet plate | 70% | Difficult |
-| 🔍 Plate too small | 50% | Often fails |
+| Good lighting, clear plate | 95% | Best case |
+| Medium lighting | 89% | Works well |
+| Low light/dark | 65% | Needs improvement |
+| Slightly tilted plate | 85% | Still usable |
+| Dirty plate | 70% | Difficult to read |
 
-**Tips for best results:**
-- ✅ Take photo in good light
-- ✅ Keep plate straight
-- ✅ Get close enough
-- ✅ Clean plate (not wet/dirty)
+## Usage Recommendations
 
----
-
-## 🐛 **Known Problems**
-
-### **1. Plates that don't work well:**
-- ❌ Very old/faded plates
-- ❌ Plate covered by tape/stickers
-- ❌ Plate very bent/damaged
-- ❌ Light reflection (flash glare)
-
-### **2. Characters that confuse AI:**
-- ⚠️ "0" (zero) vs "O" (letter)
-- ⚠️ "1" vs Thai "ท"
-- ⚠️ "8" vs Thai "บ"
-
-### **3. Hardware issues:**
-- ⚠️ Servo needs extra power if heavy
-- ⚠️ USB port name might change
+✅ Install camera in well-lit area  
+✅ Adjust camera angle for straight-on plate view  
+✅ Distance approximately 2-3 meters  
+✅ Avoid light reflections
 
 ---
 
-# 🚀 **How to Use**
+# 🚀 Real-World Application
+
+## Simulated Scenarios at PSU Phuket
+
+### Installation Point 1: Main University Entrance
+- Camera captures incoming vehicle plates
+- Opens barrier automatically for students and staff
+- Records entry time
+
+### Installation Point 2: Building Parking Lot
+- Identifies which vehicles have parking permission
+- Alerts if unauthorized vehicle detected
+- Counts available parking spaces
+
+### Installation Point 3: University Exit
+- Records exit time
+- Checks if all entered vehicles have exited
+
+## Benefits
+
+### For Students
+- Convenient entry/exit without stopping
+- No worry about forgetting ID cards
+- Saves time during rush hours
+
+### For University
+- Reduces security guard workload
+- Real-time entry/exit data
+- Increased security with automation
+- Long-term cost savings
+
+### For Staff
+- Easy statistics checking
+- Manual barrier control from mobile
+- Clear historical records
 
 ---
 
-## 💻 **Setup**
+# 🔮 Future Development
 
-### **1. What you need:**
-```
-- Python 3.9 or newer
-- Tesseract OCR
-- Arduino IDE (if using hardware)
-- Web browser (Chrome/Safari/Firefox)
-```
+## Short-term (3-6 months)
 
-### **2. Install:**
-```bash
-# Get the code
-git clone https://github.com/your-repo/thai-lpr-api.git
-cd thai-lpr-api
+1. **More AI training data** - Collect more plate images for better accuracy
+2. **Support 4-wheel vehicles** - Expand to support all vehicle types
+3. **Line notification system** - Alert staff when unusual vehicles detected
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Mac/Linux
-# .venv\Scripts\activate  # Windows
+## Long-term (6-12 months)
 
-# Install packages
-pip install -r requirements.txt
+### 📹 1. Live Camera Streaming
+- **View real-time camera feeds** on website and mobile
+- Monitor all entry/exit points simultaneously
+- Automatic video clip recording when vehicles enter/exit
+- Support multiple IP cameras at once
 
-# Setup settings
-cp .env.example .env
-# Edit .env file as needed
-```
+### 📱 2. Mobile Application
+- **Create iOS and Android apps** connected to main system
+- View live camera feeds from anywhere, anytime
+- Receive push notifications when vehicles enter/exit
+- Control barriers remotely from mobile (Admin only)
+- View entry/exit history and statistics
 
-### **3. Start server:**
-```bash
-# For development
-python -m api.main
+### 👤 3. User Portal on Website
+- **Dedicated page for regular users** (students/staff) to:
+  - Register their own vehicle plates
+  - View their personal entry/exit history
+  - Edit vehicle information (add/remove plates)
+  - Report issues or request assistance
+- **Role-based access** Regular User, Admin, Super Admin
 
-# For production
-uvicorn api.main:app --host 0.0.0.0 --port 8000
+### 🔐 4. Smart Whitelist/Blacklist System
+- Automatically manage permitted/banned vehicles
+- Set time-based access (e.g., students only 6:00-22:00)
+- Instant alerts when blacklisted vehicles detected
 
-# Open in browser
-http://localhost:8000
-```
+### ☁️ 5. Cloud Deployment
+- Deploy to Cloud (AWS/Google Cloud) for access from anywhere
+- Support multiple concurrent users
+- Automatic data backup
 
----
+## Additional Ideas
 
-## 📱 **Use on Phone**
-
-### **1. Connect to same WiFi:**
-```bash
-# Find your computer's IP
-ifconfig | grep "inet "  # Mac/Linux
-ipconfig  # Windows
-
-# Let's say you get: 192.168.1.100
-```
-
-### **2. Open on phone:**
-```
-Open Safari/Chrome on phone
-→ Type: http://192.168.1.100:8000
-→ Click "Choose File"
-→ Select photo
-→ Click "Detect Plate"
-→ See results
-```
+- **Vehicle classification** - Distinguish motorcycles, cars, trucks
+- **Multiple cameras** - Install at multiple points with single connection
+- **Automatic reports** - Send daily statistics via Email
+- **Parking payment** - Integrate payment system for visitors
+- **QR Code backup** - Use QR codes when plate reading fails
 
 ---
 
-## 🔧 **Connect Arduino**
+# 🎓 Summary
 
-### **Wiring:**
-```
-Arduino UNO          Servo Motor SG90
-  Pin 9  ────────────  Signal (Orange wire)
-  5V     ────────────  VCC (Red wire)
-  GND    ────────────  GND (Brown wire)
-```
+## What We Accomplished
 
-### **Upload Code:**
-```
-1. Open Arduino IDE
-2. File → Open → arduino/gate_control_wifi.ino
-3. Tools → Board → Arduino UNO
-4. Tools → Port → Choose your port
-5. Click Upload (→ button)
-6. Wait for "Upload complete"
-```
+✅ **Developed AI Model** that reads Thai plates with 89-95% accuracy  
+✅ **Built Web Application** that's easy to use and mobile-friendly  
+✅ **Connected Hardware** that actually controls barriers  
+✅ **Tested functionality** with satisfactory results
 
-### **Test:**
-```bash
-# Open Serial Monitor (115200 baud)
-Type: PING
-→ Should see: PONG
+## What We Learned
 
-Type: OPEN
-→ Should see: ACK:OPEN
-→ Servo moves 90° → waits 2 sec → moves back 0°
+- Training AI models from real data
+- Full-stack web application development
+- Integrating software with hardware
+- Problem-solving when facing obstacles
 
-Type: STATUS
-→ Should see: STATUS:CLOSED|ANGLE:0|UPTIME:123s
-```
+## Current Limitations
+
+⚠️ Still a **Prototype** for learning purposes  
+⚠️ Works well in good lighting, needs improvement for nighttime  
+⚠️ Limited training data (300 images), can be improved  
+⚠️ Not ready for production use, requires more testing
+
+## Benefits to University
+
+This project demonstrates that **AI technology can be applied to solve real university problems**, not just theory. It serves as a prototype that can be further developed in the future.
 
 ---
 
-## ⚙️ **Settings File (.env)**
-
-```bash
-# Server
-APP_HOST=0.0.0.0
-APP_PORT=8000
-
-# Arduino
-SERIAL_ENABLED=true  # turn on/off
-SERIAL_PORT=/dev/cu.usbmodem1101  # Mac
-# SERIAL_PORT=COM3  # Windows
-SERIAL_BAUD=115200
-
-# Gate Control
-GATE_TRIGGER_MODE=per_plate_cooldown
-OPEN_COOLDOWN_SEC=30
-
-# AI Models
-DETECTOR_WEIGHTS=models/detector/best.pt
-READER_WEIGHTS=models/reader/best.pt
-
-# OCR
-OCR_LANG=tha+eng
-TESSERACT_CMD=/opt/homebrew/bin/tesseract
-
-# Database
-DATABASE_URL=sqlite:///./data.db
-```
-
----
-
-# 🔮 **Future Improvements**
-
----
-
-## 🎯 **What Could Be Better**
-
-### **1. AI Model:**
-- 🔄 More training data (300 → 1000+ images)
-- 🔄 Better data variety (angles, lighting, weather)
-- 🔄 Support 4-wheel car plates
-- 🔄 Support different plate colors
-
-### **2. Speed:**
-- ⚡ Make model smaller/faster
-- ⚡ Use GPU (graphics card)
-- ⚡ Process multiple images at once
-- ⚡ Remember recent results
-
-### **3. New Features:**
-- 📱 Make a mobile app
-- ☁️ Put on cloud (AWS/Google Cloud)
-- 📊 Better statistics page
-- 🔔 Send notifications
-
-### **4. More Accurate:**
-- 🎯 Better image cleanup
-- 🎯 Use multiple models together
-- 🎯 Spell checker for results
-
-### **5. Security:**
-- 🔐 Add HTTPS (encrypted connection)
-- 🔐 Limit requests (prevent abuse)
-- 🔐 Better input checking
-- 🔐 Better session management
-
----
-
-## 💡 **Ideas for Later**
-
-### **1. Multiple Cameras:**
-```
-Camera 1: Entry gate
-Camera 2: Exit gate
-Camera 3: Inside parking
-```
-
-### **2. Vehicle Types:**
-```
-- Motorcycle
-- Car
-- Truck
-- Van
-```
-
-### **3. Lists:**
-```
-Whitelist: Employee vehicles → auto open
-Blacklist: Banned vehicles → alert
-Unknown: Regular vehicles → ask permission
-```
-
-### **4. Connect to:**
-```
-- Line Notify: Alert when car enters
-- Email: Daily report
-- Dashboard: Live monitoring
-- Mobile App: Remote control
-```
-
----
-
-# 🎓 **Summary**
-
----
-
-## ✅ **What We Did**
-
-### **Technical:**
-- ✅ Trained 2 AI models (Detector + Reader)
-- ✅ Built full web application
-- ✅ Connected Arduino hardware
-- ✅ Added database & login
-
-### **Learning:**
-- ✅ Machine Learning / AI
-- ✅ Computer Vision
-- ✅ Web Development
-- ✅ Hardware Programming
-- ✅ Putting systems together
-
-### **Results:**
-- ✅ Accuracy: 89-95%
-- ✅ Speed: 2-5 seconds
-- ✅ Works on mobile
-- ✅ Actually functions
-
----
-
-## 📚 **What We Learned**
-
-### **1. AI/ML:**
-- How YOLO works
-- How to train models
-- How to test accuracy
-- OCR technology
-
-### **2. Software:**
-- FastAPI framework
-- Async programming
-- Real-time communication
-- Database design
-
-### **3. Hardware:**
-- Arduino programming
-- Serial communication
-- Motor control
-- Basic circuits
-
-### **4. Problem Solving:**
-- Fixing AI errors
-- Handling edge cases
-- Making things faster
-- Good user experience
-
----
-
-## 🎯 **Challenges We Faced**
-
-| Problem | How We Fixed It |
-|---------|----------------|
-| Thai text hard to read | Used YOLO + Tesseract together |
-| Not enough training data | Data augmentation |
-| Too slow | Made model smaller |
-| Hardware bugs | Good error handling |
-| Mobile compatibility | Responsive design |
-
----
-
-## 💬 **Common Questions**
-
-### **Q1: Does it really work?**
-**A:** Yes! But it's a learning project, not ready for commercial use.
-
-### **Q2: Why not use Google Cloud?**
-**A:** We wanted to learn how to train our own models and work offline.
-
-### **Q3: Is 89% accuracy good enough?**
-**A:** For a student project with limited data (300 images), yes! Can improve with more data.
-
-### **Q4: Do you save personal information?**
-**A:** No. Only plate number, province, time. No owner info.
-
-### **Q5: Can I use this code?**
-**A:** Yes! It's open source (MIT License) for educational use.
-
----
-
-## 🙏 **Thank You**
+# 🙏 Thank You
 
 <p align="center">
-<strong>Thai License Plate Recognition System</strong><br/>
-Senior Project - Computer Engineering<br/><br/>
-Created by: [Your Team Name]<br/>
-Advisor: [Advisor Name]<br/>
-Year: 2025<br/><br/>
-🌟 GitHub: github.com/your-repo/thai-lpr-api<br/>
-📧 Contact: your-email@example.com
+<strong style="font-size: 1.2em;">Automatic License Plate Recognition System</strong><br/>
+<strong>Thai License Plate Recognition System</strong><br/><br/>
+4th Year Computer Engineering Senior Project<br/>
+Prince of Songkla University, Phuket Campus<br/>
+Academic Year 2025<br/><br/>
 </p>
 
 ---
 
-## 📎 **Extra Info**
+## 💬 Frequently Asked Questions
 
-### **A. File Organization:**
-```
-thai-lpr-api/
-├── api/
-│   ├── main.py           # Main app
-│   ├── models.py         # Database
-│   ├── local_models.py   # YOLO
-│   ├── ocr.py           # Tesseract
-│   ├── arduino.py       # Hardware
-│   └── auth.py          # Login
-├── models/
-│   ├── detector/best.pt # Find plates
-│   └── reader/best.pt   # Read text
-├── static/
-│   ├── index.html       # Web page
-│   ├── js/app.js        # JavaScript
-│   └── css/style.css    # Design
-├── arduino/
-│   └── gate_control_wifi.ino
-├── .env                 # Settings
-├── requirements.txt     # Python packages
-└── README.md           # Instructions
-```
+**Q: Does it really work?**  
+A: Yes! But it's a prototype for learning. Needs more development for production use.
 
-### **B. What You Need to Install:**
-```
-fastapi==0.115.0
-uvicorn==0.30.6
-ultralytics==8.3.32
-pytesseract==0.3.13
-opencv-python==4.11.0.86
-pyserial==3.5
-sqlalchemy==2.0.35
-python-dotenv==1.0.1
-```
+**Q: Is 89% accuracy good enough?**  
+A: For training with 300 images, it's very good. Can improve with more data.
 
-### **C. Website Pages:**
-```
-POST   /detect            # Read plate
-GET    /records           # View history
-DELETE /records/{id}      # Delete record
-POST   /auth/login        # Login
-POST   /auth/register     # Sign up
-WS     /ws               # Live updates
-GET    /arduino/status    # Hardware status
-POST   /arduino/open      # Manual open gate
-```
+**Q: Why not use Google Cloud?**  
+A: We wanted to learn how to train our own models and work offline.
+
+**Q: Do you store personal information?**  
+A: No. Only plate number, province, and time. No vehicle owner information.
+
+**Q: Can it be used outside university?**  
+A: Yes. Such as residential areas, condos, office buildings, or parking lots.
 
 ---
 
 <p align="center">
-<strong style="font-size: 1.5em;">THE END</strong><br/>
-Thank you! 🙏
+<strong style="font-size: 1.5em;">END OF PRESENTATION</strong><br/>
+Thank you for watching 🙏
 </p>
-

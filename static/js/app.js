@@ -15,6 +15,8 @@ let cameraStream = null;
 let isCameraActive = false;
 let captureInterval = null;
 const CAMERA_CAPTURE_INTERVAL = 2000; // Capture every 2 seconds
+let cameraSource = 'webrtc'; // 'webrtc' or 'droidcam'
+let droidcamURL = null;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -62,11 +64,36 @@ function updateUserUI() {
         document.getElementById('username').textContent = currentUser.username;
         document.getElementById('logoutBtn').style.display = 'inline-block';
         
-        // Show admin tab if user is admin
+        // Show/hide UI based on role
         if (currentUser.role === 'admin') {
+            // Admin: Show all features
             document.querySelectorAll('.admin-only').forEach(el => {
                 el.style.display = 'block';
             });
+            document.getElementById('userUploadSection').style.display = 'none';
+            document.getElementById('adminUploadSection').style.display = 'block';
+            document.getElementById('fileInputAdmin').style.display = 'block';
+            document.getElementById('fileInput').style.display = 'none';
+            
+            // Load admin-specific data
+            loadPlateStatus();
+        } else {
+            // User: Show only image upload
+            document.querySelectorAll('.admin-only').forEach(el => {
+                if (!el.classList.contains('admin-tab')) { // Keep admin tab button hidden
+                    el.style.display = 'none';
+                }
+            });
+            document.getElementById('userUploadSection').style.display = 'block';
+            document.getElementById('adminUploadSection').style.display = 'none';
+            document.getElementById('fileInputAdmin').style.display = 'none';
+            document.getElementById('fileInput').style.display = 'block';
+            
+            // Make file input accept only images for users
+            const userInput = document.getElementById('fileInput');
+            if (userInput) {
+                userInput.accept = 'image/*';
+            }
         }
         
         hideLoginModal();
@@ -92,9 +119,16 @@ function setupEventListeners() {
     // Upload area
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
+    const fileInputAdmin = document.getElementById('fileInputAdmin');
     
-    uploadArea.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', handleFileSelect);
+    uploadArea.addEventListener('click', () => {
+        // Use admin input if admin, user input if user
+        const activeInput = (currentUser && currentUser.role === 'admin') ? fileInputAdmin : fileInput;
+        if (activeInput) activeInput.click();
+    });
+    
+    if (fileInput) fileInput.addEventListener('change', handleFileSelect);
+    if (fileInputAdmin) fileInputAdmin.addEventListener('change', handleFileSelect);
     
     // Drag & drop
     uploadArea.addEventListener('dragover', (e) => {
@@ -121,6 +155,28 @@ function setupEventListeners() {
     
     // Camera button (will add to HTML)
     document.getElementById('cameraBtn')?.addEventListener('click', toggleCamera);
+    
+    // Camera source selection
+    document.querySelectorAll('input[name="cameraSource"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            cameraSource = e.target.value;
+            const droidcamSettings = document.getElementById('droidcamSettings');
+            if (cameraSource === 'droidcam') {
+                droidcamSettings.style.display = 'block';
+                updateDroidcamURL();
+            } else {
+                droidcamSettings.style.display = 'none';
+            }
+            // Stop camera if active
+            if (isCameraActive) {
+                stopCamera();
+            }
+        });
+    });
+    
+    // DroidCam IP/Port input handlers
+    document.getElementById('droidcamIP')?.addEventListener('input', updateDroidcamURL);
+    document.getElementById('droidcamPort')?.addEventListener('input', updateDroidcamURL);
     
     // Pagination
     document.getElementById('prevPage')?.addEventListener('click', () => {
@@ -193,6 +249,7 @@ function switchTab(tabName) {
         loadRecords();
     } else if (tabName === 'admin') {
         loadStats();
+        loadPlateStatus();
     }
 }
 
@@ -207,20 +264,14 @@ async function toggleCamera() {
 
 async function startCamera() {
     try {
-        // Request camera access
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment', // Use rear camera on mobile
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            }
-        });
+        cameraSource = document.querySelector('input[name="cameraSource"]:checked')?.value || 'webrtc';
         
-        // Show video preview
-        const videoPreview = document.getElementById('cameraPreview');
-        if (videoPreview) {
-            videoPreview.srcObject = cameraStream;
-            videoPreview.play();
+        if (cameraSource === 'droidcam') {
+            // Start DroidCam IP camera
+            await startDroidcam();
+        } else {
+            // Start WebRTC camera
+            await startWebRTCCamera();
         }
         
         isCameraActive = true;
@@ -245,14 +296,96 @@ async function startCamera() {
     } catch (error) {
         console.error('Camera error:', error);
         showNotification('Failed to access camera: ' + error.message, 'error');
+        isCameraActive = false;
+    }
+}
+
+async function startWebRTCCamera() {
+    // Request camera access
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+            facingMode: 'environment', // Use rear camera on mobile
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        }
+    });
+    
+    // Show video preview
+    const videoPreview = document.getElementById('cameraPreview');
+    const droidcamPreview = document.getElementById('droidcamPreview');
+    
+    if (videoPreview) {
+        videoPreview.srcObject = cameraStream;
+        videoPreview.play();
+        videoPreview.style.display = 'block';
+    }
+    
+    if (droidcamPreview) {
+        droidcamPreview.style.display = 'none';
+    }
+}
+
+async function startDroidcam() {
+    // Get DroidCam settings
+    const ip = document.getElementById('droidcamIP')?.value || '192.168.100.143';
+    const port = document.getElementById('droidcamPort')?.value || '4747';
+    droidcamURL = `http://${ip}:${port}/mjpegfeed`;
+    
+    // Show DroidCam preview
+    const videoPreview = document.getElementById('cameraPreview');
+    const droidcamPreview = document.getElementById('droidcamPreview');
+    
+    if (videoPreview) {
+        videoPreview.style.display = 'none';
+    }
+    
+    if (droidcamPreview) {
+        droidcamPreview.src = droidcamURL;
+        droidcamPreview.style.display = 'block';
+        droidcamPreview.onerror = () => {
+            showNotification('Failed to connect to DroidCam. Check IP and Port.', 'error');
+            stopCamera();
+        };
+    }
+    
+    // Test connection
+    try {
+        const testResponse = await fetch(droidcamURL, { method: 'HEAD', mode: 'no-cors' });
+        console.log('DroidCam URL:', droidcamURL);
+    } catch (error) {
+        console.warn('DroidCam connection test:', error);
+        // Continue anyway, the img tag will show error if it fails
+    }
+}
+
+function updateDroidcamURL() {
+    const ip = document.getElementById('droidcamIP')?.value || '192.168.100.143';
+    const port = document.getElementById('droidcamPort')?.value || '4747';
+    const urlDisplay = document.getElementById('droidcamURL');
+    if (urlDisplay) {
+        urlDisplay.textContent = `http://${ip}:${port}/mjpegfeed`;
     }
 }
 
 function stopCamera() {
-    // Stop camera stream
+    // Stop camera stream (WebRTC)
     if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
         cameraStream = null;
+    }
+    
+    // Stop DroidCam preview
+    const droidcamPreview = document.getElementById('droidcamPreview');
+    if (droidcamPreview) {
+        droidcamPreview.src = '';
+        droidcamPreview.style.display = 'none';
+    }
+    
+    // Stop video preview
+    const videoPreview = document.getElementById('cameraPreview');
+    if (videoPreview) {
+        videoPreview.srcObject = null;
+        videoPreview.style.display = 'none';
     }
     
     // Stop auto-capture
@@ -262,6 +395,7 @@ function stopCamera() {
     }
     
     isCameraActive = false;
+    droidcamURL = null;
     
     // Update UI
     const cameraBtn = document.getElementById('cameraBtn');
@@ -288,49 +422,97 @@ function startAutoCapture() {
 
 async function captureAndProcess() {
     try {
-        const video = document.getElementById('cameraPreview');
-        if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        if (cameraSource === 'droidcam' && droidcamURL) {
+            // Use DroidCam IP camera - send URL to backend
+            await processDroidcamFrame();
+        } else {
+            // Use WebRTC camera - capture from video element
+            await processWebRTCFrame();
+        }
+    } catch (error) {
+        console.error('Capture error:', error);
+    }
+}
+
+async function processWebRTCFrame() {
+    const video = document.getElementById('cameraPreview');
+    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        return;
+    }
+    
+    // Create canvas to capture frame
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    
+    // Convert to blob
+    canvas.toBlob(async (blob) => {
+        if (blob) {
+            // Send to API
+            const formData = new FormData();
+            formData.append('file', blob, 'camera_capture.jpg');
+            
+            try {
+                const response = await fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.plate_text) {
+                    // Show detection in UI
+                    showCameraDetection(result);
+                    
+                    // Highlight on video (optional)
+                    highlightDetection(video, ctx);
+                }
+                
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+        }
+    }, 'image/jpeg', 0.8);
+}
+
+async function processDroidcamFrame() {
+    // For DroidCam, we send the URL to backend instead of capturing frame
+    // Backend will fetch the frame from the IP camera using cv2.VideoCapture
+    
+    // Use the base URL (no timestamp needed for MJPEG stream)
+    try {
+        const formData = new FormData();
+        formData.append('image_url', droidcamURL);
+        
+        const response = await fetch('/detect', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            console.error('Detection API error:', errorData);
             return;
         }
         
-        // Create canvas to capture frame
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0);
+        const result = await response.json();
         
-        // Convert to blob
-        canvas.toBlob(async (blob) => {
-            if (blob) {
-                // Send to API
-                const formData = new FormData();
-                formData.append('file', blob, 'camera_capture.jpg');
-                
-                try {
-                    const response = await fetch('/detect', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.plate_text) {
-                        // Show detection in UI
-                        showCameraDetection(result);
-                        
-                        // Highlight on video (optional)
-                        highlightDetection(video, ctx);
-                    }
-                    
-                } catch (error) {
-                    console.error('Detection error:', error);
-                }
+        if (result.plate_text) {
+            // Show detection in UI
+            showCameraDetection(result);
+            
+            // Flash preview on detection
+            const droidcamPreview = document.getElementById('droidcamPreview');
+            if (droidcamPreview) {
+                highlightDetection(droidcamPreview, null);
             }
-        }, 'image/jpeg', 0.8);
+        }
         
     } catch (error) {
-        console.error('Capture error:', error);
+        console.error('DroidCam detection error:', error);
+        showNotification('DroidCam detection failed: ' + error.message, 'error');
     }
 }
 
@@ -359,18 +541,26 @@ function showCameraDetection(result) {
     detectionCard.style.animation = 'flash 0.5s ease-out';
 }
 
-function highlightDetection(video, ctx) {
-    // Flash border
-    video.style.border = '4px solid #10b981';
-    setTimeout(() => {
-        video.style.border = '2px solid #e2e8f0';
-    }, 500);
+function highlightDetection(element, ctx) {
+    // Flash border on video or image element
+    if (element) {
+        const originalBorder = element.style.border;
+        element.style.border = '4px solid #10b981';
+        element.style.transition = 'border 0.3s ease';
+        setTimeout(() => {
+            element.style.border = originalBorder || '2px solid #e2e8f0';
+        }, 500);
+    }
 }
 
 // ===== File Upload =====
 function handleFileSelect() {
-    const fileInput = document.getElementById('fileInput');
-    const file = fileInput.files[0];
+    // Get the active file input (admin or user)
+    const activeInput = (currentUser && currentUser.role === 'admin' && document.getElementById('fileInputAdmin')) 
+        ? document.getElementById('fileInputAdmin') 
+        : document.getElementById('fileInput');
+    
+    const file = activeInput?.files[0];
     
     if (!file) return;
     
@@ -378,6 +568,8 @@ function handleFileSelect() {
     const preview = document.getElementById('preview');
     const imagePreview = document.getElementById('imagePreview');
     const videoPreview = document.getElementById('videoPreview');
+    const videoPlayerSection = document.getElementById('videoPlayerSection');
+    const videoPlayer = document.getElementById('videoPlayer');
     
     preview.style.display = 'block';
     
@@ -385,25 +577,162 @@ function handleFileSelect() {
         imagePreview.src = URL.createObjectURL(file);
         imagePreview.style.display = 'block';
         videoPreview.style.display = 'none';
-    } else if (file.type.startsWith('video/')) {
-        videoPreview.src = URL.createObjectURL(file);
-        videoPreview.style.display = 'block';
+        if (videoPlayerSection) videoPlayerSection.style.display = 'none';
+        
+        // Show upload button for images
+        document.getElementById('uploadBtn').style.display = 'inline-block';
+        
+    } else if (file.type.startsWith('video/') && currentUser && currentUser.role === 'admin') {
+        // Admin only: Video playback with real-time detection
+        const videoURL = URL.createObjectURL(file);
+        
+        // Show video player
+        if (videoPlayerSection) videoPlayerSection.style.display = 'block';
+        if (videoPlayer) {
+            videoPlayer.src = videoURL;
+            
+            // Start video detection when video plays
+            videoPlayer.onloadedmetadata = () => {
+                startVideoDetection(videoPlayer);
+            };
+        }
+        
+        videoPreview.style.display = 'none';
         imagePreview.style.display = 'none';
+        
+        // Don't show upload button for videos (we detect while playing)
+        document.getElementById('uploadBtn').style.display = 'none';
     }
-    
-    // Show upload button
-    document.getElementById('uploadBtn').style.display = 'inline-block';
     
     // Hide result
     document.getElementById('result').style.display = 'none';
 }
 
+// Video detection state
+let videoDetectionActive = false;
+let videoDetectionInterval = null;
+
+function startVideoDetection(videoElement) {
+    if (videoDetectionActive) return;
+    
+    videoDetectionActive = true;
+    const detectionList = document.getElementById('videoDetectionList');
+    if (detectionList) detectionList.innerHTML = '';
+    
+    showNotification('Starting video detection...', 'info');
+    
+    // Detect every 2 seconds while video is playing
+    videoDetectionInterval = setInterval(async () => {
+        if (videoElement.paused || videoElement.ended) {
+            stopVideoDetection();
+            return;
+        }
+        
+        // Capture current frame
+        const canvas = document.createElement('canvas');
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0);
+        
+        // Convert to blob and send to API
+        canvas.toBlob(async (blob) => {
+            if (blob) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'video_frame.jpg');
+                    
+                    const response = await fetch('/detect', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.plate_text) {
+                        showVideoDetection(result, detectionList, videoElement.currentTime);
+                    }
+                } catch (error) {
+                    console.error('Video detection error:', error);
+                }
+            }
+        }, 'image/jpeg', 0.8);
+    }, 2000);
+    
+    // Stop detection when video ends
+    videoElement.addEventListener('ended', stopVideoDetection);
+    videoElement.addEventListener('pause', () => {
+        if (videoElement.paused && !videoElement.ended) {
+            stopVideoDetection();
+        }
+    });
+}
+
+function stopVideoDetection() {
+    if (videoDetectionInterval) {
+        clearInterval(videoDetectionInterval);
+        videoDetectionInterval = null;
+    }
+    videoDetectionActive = false;
+}
+
+function showVideoDetection(result, container, timestamp) {
+    if (!container) return;
+    
+    const detectionDiv = document.createElement('div');
+    detectionDiv.style.cssText = `
+        padding: 12px;
+        margin-bottom: 8px;
+        background: ${result.is_new_plate ? '#e0f2fe' : '#fef3c7'};
+        border-left: 4px solid ${result.is_new_plate ? '#0369a1' : '#f59e0b'};
+        border-radius: 8px;
+    `;
+    
+    const statusBadge = result.is_new_plate 
+        ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">🆕 NEW</span>'
+        : '<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">🔄 DUPLICATE</span>';
+    
+    const timeFormatted = formatTime(timestamp);
+    
+    detectionDiv.innerHTML = `
+        ${statusBadge}
+        <div style="font-weight: bold; margin-top: 5px; font-size: 16px;">${result.plate_text || 'N/A'}</div>
+        <div style="color: #6b7280; font-size: 14px;">${result.province_text || ''}</div>
+        <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
+            Time: ${timeFormatted} | Confidence: ${((result.confidence || 0) * 100).toFixed(1)}%
+        </div>
+    `;
+    
+    container.insertBefore(detectionDiv, container.firstChild);
+    
+    // Keep only last 20 detections
+    while (container.children.length > 20) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 async function processUpload() {
-    const fileInput = document.getElementById('fileInput');
-    const file = fileInput.files[0];
+    // Get the active file input (admin or user)
+    const activeInput = (currentUser && currentUser.role === 'admin' && document.getElementById('fileInputAdmin')) 
+        ? document.getElementById('fileInputAdmin') 
+        : document.getElementById('fileInput');
+    
+    const file = activeInput?.files[0];
     
     if (!file) {
         showNotification('Please select a file', 'error');
+        return;
+    }
+    
+    // Users can only upload images
+    if (currentUser && currentUser.role !== 'admin' && !file.type.startsWith('image/')) {
+        showNotification('Users can only upload image files', 'error');
         return;
     }
     
@@ -415,8 +744,10 @@ async function processUpload() {
         const formData = new FormData();
         formData.append('file', file);
         
-        // Choose endpoint based on file type
-        const endpoint = file.type.startsWith('video/') ? '/detect-video' : '/detect';
+        // Choose endpoint based on file type (only for admin)
+        const endpoint = (currentUser && currentUser.role === 'admin' && file.type.startsWith('video/')) 
+            ? '/detect-video' 
+            : '/detect';
         
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -435,6 +766,11 @@ async function processUpload() {
             showVideoResult(result);
         }
         
+        // Refresh plate status if admin
+        if (currentUser && currentUser.role === 'admin') {
+            loadPlateStatus();
+        }
+        
     } catch (error) {
         console.error('Upload error:', error);
         document.getElementById('loading').style.display = 'none';
@@ -451,9 +787,21 @@ function showImageResult(result) {
     document.getElementById('confidence').textContent = result.confidence 
         ? (result.confidence * 100).toFixed(2) 
         : 'N/A';
-    document.getElementById('gateStatus').textContent = result.gate_opened ? '✅ Opened' : '❌ Not Opened';
     
-    showNotification('Detection completed!', 'success');
+    // Show plate status (new or duplicate) for admin
+    const gateStatusEl = document.getElementById('gateStatus');
+    if (gateStatusEl && currentUser && currentUser.role === 'admin') {
+        if (result.is_new_plate) {
+            gateStatusEl.innerHTML = '<span style="color: #10b981;">🆕 ป้ายใหม่</span>';
+        } else {
+            gateStatusEl.innerHTML = `<span style="color: #f59e0b;">🔄 ป้ายซ้ำ (เจอแล้ว ${result.seen_count || 1} ครั้ง)</span>`;
+        }
+    } else if (gateStatusEl) {
+        gateStatusEl.textContent = result.gate_opened ? '✅ Opened' : '❌ Not Opened';
+    }
+    
+    const message = result.is_new_plate ? '🆕 Detection completed! New plate detected!' : '🔄 Detection completed! Duplicate plate.';
+    showNotification(message, result.is_new_plate ? 'success' : 'info');
 }
 
 function showVideoResult(result) {
@@ -538,8 +886,83 @@ async function loadStats() {
         document.getElementById('todayRecords').textContent = data.today_records || 0;
         document.getElementById('avgConfidence').textContent = ((data.avg_confidence || 0) * 100).toFixed(1) + '%';
         
+        // Also load plate status
+        await loadPlateStatus();
+        
     } catch (error) {
         console.error('Failed to load stats:', error);
+    }
+}
+
+async function loadPlateStatus() {
+    try {
+        const response = await fetch('/api/plates/status');
+        const data = await response.json();
+        
+        // Update counts
+        document.getElementById('newPlatesCount').textContent = data.new_plates_count || 0;
+        document.getElementById('duplicatePlatesCount').textContent = data.duplicate_plates_count || 0;
+        document.getElementById('totalPlatesCount').textContent = data.total_unique_plates || 0;
+        
+        // Display new plates
+        const newPlatesList = document.getElementById('newPlatesList');
+        if (newPlatesList) {
+            if (data.new_plates && data.new_plates.length > 0) {
+                newPlatesList.innerHTML = data.new_plates.map(plate => `
+                    <div class="plate-card" style="padding: 15px; margin-bottom: 10px; background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-left: 4px solid #0369a1; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: bold; font-size: 18px; color: #0369a1;">${plate.plate_text || 'N/A'}</div>
+                                <div style="color: #6b7280; margin-top: 5px;">${plate.province_text || ''}</div>
+                                <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
+                                    Confidence: ${((plate.confidence || 0) * 100).toFixed(1)}% | 
+                                    ${plate.created_at ? new Date(plate.created_at).toLocaleString('th-TH') : ''}
+                                </div>
+                            </div>
+                            ${plate.plate_image ? `
+                                <img src="${plate.plate_image}" style="width: 80px; height: 50px; object-fit: cover; border-radius: 6px; margin-left: 15px;" onclick="showImageModal('${plate.plate_image}')">
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                newPlatesList.innerHTML = '<p class="text-center" style="color: var(--text-light);">ไม่มีป้ายใหม่</p>';
+            }
+        }
+        
+        // Display duplicate plates
+        const duplicatePlatesList = document.getElementById('duplicatePlatesList');
+        if (duplicatePlatesList) {
+            if (data.duplicate_plates && data.duplicate_plates.length > 0) {
+                duplicatePlatesList.innerHTML = data.duplicate_plates.map(plate => `
+                    <div class="plate-card" style="padding: 15px; margin-bottom: 10px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                                        เจอแล้ว ${plate.seen_count || 1} ครั้ง
+                                    </span>
+                                </div>
+                                <div style="font-weight: bold; font-size: 18px; color: #92400e; margin-top: 5px;">${plate.plate_text || 'N/A'}</div>
+                                <div style="color: #6b7280; margin-top: 5px;">${plate.province_text || ''}</div>
+                                <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
+                                    Confidence: ${((plate.confidence || 0) * 100).toFixed(1)}% | 
+                                    ${plate.created_at ? new Date(plate.created_at).toLocaleString('th-TH') : ''}
+                                </div>
+                            </div>
+                            ${plate.plate_image ? `
+                                <img src="${plate.plate_image}" style="width: 80px; height: 50px; object-fit: cover; border-radius: 6px; margin-left: 15px;" onclick="showImageModal('${plate.plate_image}')">
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                duplicatePlatesList.innerHTML = '<p class="text-center" style="color: var(--text-light);">ไม่มีป้ายซ้ำ</p>';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Failed to load plate status:', error);
     }
 }
 

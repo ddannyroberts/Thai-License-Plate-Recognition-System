@@ -84,19 +84,62 @@
         <!-- Upload Tab -->
         <div id="upload" class="tab-content active">
             <div class="upload-section">
-                <h2>📤 Upload Image or Video | 📷 Real-time Camera</h2>
+                <!-- User: Only Image Upload -->
+                <div id="userUploadSection">
+                    <h2>📤 อัปโหลดรูปภาพป้ายทะเบียน</h2>
+                    <p style="color: var(--text-light); margin-bottom: 20px;">
+                        กรุณาอัปโหลดรูปภาพป้ายทะเบียนรถจักรยานยนต์
+                    </p>
+                </div>
                 
-                <div class="upload-type-selector">
-                    <label>
-                        <input type="radio" name="uploadType" value="file" checked> File Upload
-                    </label>
-                    <label>
-                        <input type="radio" name="uploadType" value="camera"> Live Camera
-                    </label>
+                <!-- Admin: Full Features -->
+                <div id="adminUploadSection" style="display: none;">
+                    <h2>📤 Upload Image or Video | 📷 Real-time Camera</h2>
+                    
+                    <div class="upload-type-selector">
+                        <label>
+                            <input type="radio" name="uploadType" value="file" checked> File Upload
+                        </label>
+                        <label>
+                            <input type="radio" name="uploadType" value="camera" class="admin-only"> Live Camera
+                        </label>
+                    </div>
                 </div>
 
-                <!-- Camera Section -->
-                <div id="cameraSection" style="display:none;">
+                <!-- Camera Section (Admin Only) -->
+                <div id="cameraSection" class="admin-only" style="display:none;">
+                    <!-- Camera Source Selection -->
+                    <div class="camera-source-selector" style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                        <h4 style="margin-bottom: 15px;">เลือกแหล่งกล้อง:</h4>
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+                            <label style="cursor: pointer;">
+                                <input type="radio" name="cameraSource" value="webrtc" checked> 
+                                <strong>WebRTC (กล้องคอม/มือถือ)</strong>
+                            </label>
+                            <label style="cursor: pointer;">
+                                <input type="radio" name="cameraSource" value="droidcam"> 
+                                <strong>DroidCam (IP Camera)</strong>
+                            </label>
+                        </div>
+                        
+                        <!-- DroidCam Settings -->
+                        <div id="droidcamSettings" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">IP Address:</label>
+                                <input type="text" id="droidcamIP" value="192.168.100.143" placeholder="192.168.100.143" 
+                                       style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Port:</label>
+                                <input type="number" id="droidcamPort" value="4747" placeholder="4747" 
+                                       style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            </div>
+                            <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+                                💡 ใช้ URL: <code id="droidcamURL">http://192.168.100.143:4747/mjpegfeed</code>
+                            </p>
+                        </div>
+                    </div>
+                    
                     <div style="text-align: center; margin-bottom: 20px;">
                         <button id="cameraBtn" class="btn btn-secondary">📷 Open Camera</button>
                         <p style="color: var(--text-light); margin-top: 10px;">
@@ -104,7 +147,8 @@
                         </p>
                     </div>
                     
-                    <video id="cameraPreview" autoplay playsinline></video>
+                    <video id="cameraPreview" autoplay playsinline style="display: none;"></video>
+                    <img id="droidcamPreview" style="display: none; max-width: 100%; border-radius: 12px; border: 2px solid var(--border-color); margin: 20px auto; display: block;">
                     
                     <div id="cameraDetections">
                         <h3 style="text-align: center; margin: 20px 0;">Recent Detections</h3>
@@ -114,9 +158,23 @@
                 <!-- File Upload Section -->
                 <div id="fileUploadSection">
                     <div class="upload-area" id="uploadArea">
-                        <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+                        <input type="file" id="fileInput" accept="image/*" class="user-upload-input" hidden>
+                        <input type="file" id="fileInputAdmin" accept="image/*,video/*" class="admin-only" hidden style="display: none;">
                         <p>📁 Click to select or drag & drop file here</p>
-                        <small>Supported: JPG, PNG, MP4, AVI</small>
+                        <small class="user-upload-hint">Supported: JPG, PNG</small>
+                        <small class="admin-only" style="display: none;">Supported: JPG, PNG, MP4, AVI</small>
+                    </div>
+                    
+                    <!-- Video Player (Admin Only) -->
+                    <div id="videoPlayerSection" class="admin-only" style="display: none;">
+                        <h3>📹 Video Player</h3>
+                        <video id="videoPlayer" controls style="width: 100%; max-width: 800px; border-radius: 12px; margin: 20px auto; display: block;">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div id="videoDetections" style="margin-top: 20px;">
+                            <h4>Detections while playing:</h4>
+                            <div id="videoDetectionList" style="max-height: 300px; overflow-y: auto;"></div>
+                        </div>
                     </div>
 
                     <div id="preview" style="display:none;">
@@ -181,6 +239,41 @@
         <!-- Admin Tab -->
         <div id="admin" class="tab-content admin-only">
             <h2>⚙️ Admin Dashboard</h2>
+            
+            <!-- Plate Status Overview -->
+            <div class="admin-card" style="margin-bottom: 30px;">
+                <h3>📊 Plate Detection Status</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-radius: 12px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #0369a1;" id="newPlatesCount">0</div>
+                        <div style="color: #0c4a6e; margin-top: 5px;">🆕 ป้ายใหม่</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #92400e;" id="duplicatePlatesCount">0</div>
+                        <div style="color: #78350f; margin-top: 5px;">🔄 ป้ายซ้ำ</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%); border-radius: 12px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #5b21b6;" id="totalPlatesCount">0</div>
+                        <div style="color: #4c1d95; margin-top: 5px;">📋 รวมทั้งหมด</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- New Plates Section -->
+            <div class="admin-card" style="margin-bottom: 30px;">
+                <h3>🆕 ป้ายใหม่ (ไม่เคยเจอ)</h3>
+                <div id="newPlatesList" class="plates-list">
+                    <p class="text-center" style="color: var(--text-light);">Loading...</p>
+                </div>
+            </div>
+            
+            <!-- Duplicate Plates Section -->
+            <div class="admin-card" style="margin-bottom: 30px;">
+                <h3>🔄 ป้ายซ้ำ (เคยเจอแล้ว)</h3>
+                <div id="duplicatePlatesList" class="plates-list">
+                    <p class="text-center" style="color: var(--text-light);">Loading...</p>
+                </div>
+            </div>
             
             <div class="admin-grid">
                 <!-- Statistics -->
