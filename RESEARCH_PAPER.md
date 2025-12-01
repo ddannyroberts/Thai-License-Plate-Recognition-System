@@ -317,14 +317,14 @@ End-to-end system performance was evaluated using a collection of 500 real-world
 
 Processing speed averaged 2.8 seconds per image on a MacBook Air with M1 processor, including all pipeline stages. This performance is suitable for real-time applications with moderate throughput requirements. Video processing achieved approximately 8-10 frames per second when processing every 10th frame, sufficient for most surveillance applications.
 
-**[FIGURE PLACEHOLDER 6.3.1: End-to-End Accuracy Breakdown]**
-*Caption: Pie chart or stacked bar chart showing the distribution of results: correct recognition (87.4%), partial recognition (8.2%), detection but recognition failure (3.1%), and complete failure (1.3%). This visualization clearly demonstrates the system's overall success rate.*
+**[รูปภาพที่ควรใส่ 6.3.1: กราฟวงกลมหรือกราฟแท่งซ้อนแสดงสัดส่วนผลลัพธ์ End-to-End]**
+*คำอธิบาย: กราฟวงกลมหรือกราฟแท่งซ้อนแสดงการกระจายของผลลัพธ์: การจดจำที่ถูกต้อง (87.4%), การจดจำบางส่วน (8.2%), การตรวจจับได้แต่จดจำล้มเหลว (3.1%), และล้มเหลวทั้งหมด (1.3%) การแสดงภาพนี้แสดงอัตราความสำเร็จโดยรวมของระบบอย่างชัดเจน*
 
-**[FIGURE PLACEHOLDER 6.3.2: Processing Time Distribution]**
-*Caption: Histogram showing the distribution of processing times per image across the test set. The chart includes separate bars or lines for each pipeline stage (detection, character recognition, OCR, database operations) to illustrate where time is spent. Average processing time is marked with a vertical line.*
+**[รูปภาพที่ควรใส่ 6.3.2: Histogram แสดงการกระจายเวลาในการประมวลผล]**
+*คำอธิบาย: Histogram แสดงการกระจายของเวลาประมวลผลต่อภาพในชุดทดสอบ กราฟรวมแถบหรือเส้นแยกสำหรับแต่ละขั้นตอน (detection, character recognition, OCR, database operations) เพื่อแสดงว่ามีการใช้เวลาที่ไหน เวลาเฉลี่ยถูกทำเครื่องหมายด้วยเส้นแนวตั้ง*
 
-**[FIGURE PLACEHOLDER 6.3.3: Real-World Test Examples]**
-*Caption: Collection of example images from real-world test scenarios showing: (a) Successful recognition in parking lot setting, (b) Successful recognition from street surveillance camera, (c) Manual photograph with successful recognition, (d) Example failure case with analysis of why recognition failed. Each example includes the original image, detected bounding box, and recognized text output.*
+**[รูปภาพที่ควรใส่ 6.3.3: ตัวอย่างการทดสอบในสถานการณ์จริง]**
+*คำอธิบาย: ชุดภาพตัวอย่างจากสถานการณ์ทดสอบจริง แสดง: (a) การจดจำสำเร็จในบริบทที่จอดรถ (b) การจดจำสำเร็จจากกล้องตรวจจับถนน (c) รูปถ่ายด้วยมือที่จดจำสำเร็จ (d) ตัวอย่างกรณีล้มเหลวพร้อมการวิเคราะห์ว่าทำไมการจดจำจึงล้มเหลว แต่ละตัวอย่างรวมภาพต้นฉบับ กล่องขอบเขตที่ตรวจจับได้ และผลลัพธ์ข้อความที่จดจำได้*
 
 ### 6.4 Hardware Integration Reliability
 
@@ -373,14 +373,14 @@ Memory usage analysis showed that processing a single image requires approximate
 
 Processing throughput analysis demonstrated that the system can handle approximately 20-25 images per minute on standard hardware (MacBook Air M1), suitable for most single-lane access control applications. For high-traffic scenarios requiring higher throughput, parallel processing with multiple worker processes or GPU acceleration can significantly improve capacity.
 
-**[FIGURE PLACEHOLDER 6.7.1: Processing Time Breakdown]**
-*Caption: Pie chart showing the percentage of total processing time consumed by each pipeline stage: image preprocessing (15%), model inference - detection (30%), model inference - recognition (30%), OCR operations (20%), and database/formatting (5%). The chart clearly identifies model inference as the dominant bottleneck.*
+**[รูปภาพที่ควรใส่ 6.7.1: กราฟวงกลมแสดงสัดส่วนเวลาในการประมวลผลแต่ละขั้นตอน]**
+*คำอธิบาย: กราฟวงกลมแสดงเปอร์เซ็นต์ของเวลาประมวลผลทั้งหมดที่ใช้ในแต่ละขั้นตอน: image preprocessing (15%), model inference - detection (30%), model inference - recognition (30%), OCR operations (20%), และ database/formatting (5%) กราฟระบุชัดเจนว่า model inference เป็น bottleneck หลัก*
 
-**[FIGURE PLACEHOLDER 6.7.2: Memory Usage Over Time]**
-*Caption: Line graph showing memory usage (in MB) over time during processing of multiple images. The chart shows baseline memory usage, memory spikes during model loading, and steady-state usage during image processing. Memory usage for single image processing (500 MB) and video processing with buffering (1-2 GB) is clearly marked.*
+**[รูปภาพที่ควรใส่ 6.7.2: กราฟเส้นแสดงการใช้หน่วยความจำตามเวลา]**
+*คำอธิบาย: กราฟเส้นแสดงการใช้หน่วยความจำ (หน่วย MB) ตามเวลาระหว่างการประมวลผลหลายภาพ กราฟแสดง baseline memory usage, การพุ่งขึ้นของหน่วยความจำระหว่างโหลด model, และการใช้แบบคงที่ระหว่างประมวลผลภาพ การใช้หน่วยความจำสำหรับประมวลผลภาพเดียว (500 MB) และการประมวลผลวิดีโอพร้อม buffering (1-2 GB) ถูกทำเครื่องหมายชัดเจน*
 
-**[FIGURE PLACEHOLDER 6.7.3: Processing Throughput Analysis]**
-*Caption: Bar chart or line graph showing processing throughput (images per minute) for different hardware configurations: MacBook Air M1, desktop CPU, GPU-accelerated, and multi-worker parallel processing. The chart demonstrates the performance improvements achievable through hardware upgrades or parallelization.*
+**[รูปภาพที่ควรใส่ 6.7.3: กราฟแท่งหรือกราฟเส้นแสดงการวิเคราะห์ Processing Throughput]**
+*คำอธิบาย: กราฟแท่งหรือกราฟเส้นแสดง processing throughput (จำนวนภาพต่อนาที) สำหรับการตั้งค่า hardware ต่างๆ: MacBook Air M1, desktop CPU, GPU-accelerated, และ multi-worker parallel processing กราฟแสดงการปรับปรุงประสิทธิภาพที่ทำได้ผ่านการอัพเกรด hardware หรือ parallelization*
 
 ## 7. Discussion
 
