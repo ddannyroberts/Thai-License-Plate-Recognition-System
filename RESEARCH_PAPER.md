@@ -288,11 +288,11 @@ Comprehensive evaluation is essential to validate the effectiveness of any syste
 
 Evaluation of the detection model was conducted on a held-out test set containing 2,025 images (20% of the total detector dataset). The model achieved precision of 96.2% and recall of 94.8%, resulting in an F1 score of 95.5%. The mean Average Precision at IoU threshold 0.5 (mAP50) was 94.7%, indicating excellent performance in locating license plates.
 
-**[FIGURE PLACEHOLDER 6.1.1: Precision-Recall Curve for License Plate Detection]**
-*Caption: Precision-Recall curve showing detection performance across different confidence thresholds. The curve demonstrates the trade-off between precision and recall, with the optimal operating point achieving 96.2% precision and 94.8% recall.*
+**[รูปภาพที่ควรใส่ 6.1.1: กราฟ Precision-Recall Curve สำหรับการตรวจจับป้ายทะเบียน]**
+*คำอธิบาย: กราฟเส้น Precision-Recall แสดงประสิทธิภาพการตรวจจับตามระดับ confidence ต่างๆ กราฟแสดงความสมดุลระหว่าง precision และ recall โดยจุดที่เหมาะสมที่สุดให้ผลลัพธ์ precision 96.2% และ recall 94.8%*
 
-**[FIGURE PLACEHOLDER 6.1.2: Detection Examples]**
-*Caption: Sample detection results showing successful detections (top row) and challenging cases including false positives and false negatives (bottom row). Green bounding boxes indicate correct detections, red boxes indicate false positives, and missing boxes indicate false negatives.*
+**[รูปภาพที่ควรใส่ 6.1.2: ตัวอย่างผลการตรวจจับ]**
+*คำอธิบาย: ตัวอย่างผลการตรวจจับ แสดงการตรวจจับที่สำเร็จ (แถวบน) และกรณีที่ท้าทายรวมถึง false positives และ false negatives (แถวล่าง) กล่องสีเขียวแสดงการตรวจจับที่ถูกต้อง กล่องสีแดงแสดง false positives และกล่องที่ขาดหายแสดง false negatives*
 
 False positive detections occurred primarily in images containing text signs or rectangular objects that visually resembled license plates. False negatives typically occurred in images with severe lighting issues, extreme angles, or partial occlusions where less than 50% of the license plate was visible.
 
@@ -302,14 +302,14 @@ Character-level recognition accuracy was evaluated on a test set of 1,919 croppe
 
 Analysis of recognition errors revealed that most mistakes occurred between visually similar characters. Common confusion pairs included certain Thai consonants that differ only in subtle details, and province codes that combine multiple characters. The character segmentation pipeline, which extracts and processes individual characters, contributed significantly to achieving high recognition rates.
 
-**[FIGURE PLACEHOLDER 6.2.1: Character Recognition Accuracy by Character Type]**
-*Caption: Bar chart showing recognition accuracy percentages for different character categories (Arabic numerals, Thai consonants, Thai vowels, province codes). The chart clearly illustrates that numerals achieve the highest accuracy (96.8%), followed by consonants (91.5%) and vowels (87.2%).*
+**[รูปภาพที่ควรใส่ 6.2.1: กราฟแท่งแสดง Accuracy การจดจำตามประเภทตัวอักษร]**
+*คำอธิบาย: กราฟแท่งแสดงเปอร์เซ็นต์ accuracy การจดจำสำหรับแต่ละประเภท (ตัวเลขอาหรับ, พยัญชนะไทย, สระไทย, รหัสจังหวัด) กราฟแสดงชัดเจนว่าตัวเลขมีความแม่นยำสูงสุด (96.8%) ตามด้วยพยัญชนะ (91.5%) และสระ (87.2%)*
 
-**[FIGURE PLACEHOLDER 6.2.2: Character Confusion Matrix]**
-*Caption: Confusion matrix heatmap showing the most common character recognition errors. Rows represent true character labels, columns represent predicted labels. Darker colors indicate higher confusion rates. The matrix highlights visually similar character pairs that cause recognition errors.*
+**[รูปภาพที่ควรใส่ 6.2.2: Confusion Matrix สำหรับการจดจำตัวอักษร]**
+*คำอธิบาย: Heatmap ของ confusion matrix แสดงข้อผิดพลาดในการจดจำตัวอักษรที่พบบ่อย แถวแสดง label ที่ถูกต้อง คอลัมน์แสดง label ที่ทำนาย สีเข้มแสดงอัตราการสับสนสูง Matrix นี้เน้นคู่ตัวอักษรที่คล้ายกันทางสายตาซึ่งทำให้เกิดข้อผิดพลาดในการจดจำ*
 
-**[FIGURE PLACEHOLDER 6.2.3: Character Segmentation Examples]**
-*Caption: Visual examples of character segmentation results. The figure shows: (a) Original cropped license plate image, (b) Character bounding boxes detected by the reader model, (c) Individual segmented character images, (d) Final recognized text output. Both successful segmentations and challenging cases with touching or overlapping characters are shown.*
+**[รูปภาพที่ควรใส่ 6.2.3: ตัวอย่างการแยกตัวอักษร (Character Segmentation)]**
+*คำอธิบาย: ตัวอย่างภาพผลการแยกตัวอักษร รูปแสดง: (a) ภาพป้ายทะเบียนที่ตัดมา (b) กล่องขอบเขตตัวอักษรที่ตรวจจับได้โดย reader model (c) ภาพตัวอักษรแต่ละตัวที่แยกออกมา (d) ผลลัพธ์ข้อความสุดท้ายที่จดจำได้ ทั้งกรณีที่แยกสำเร็จและกรณีที่ท้าทายเช่นตัวอักษรที่แตะหรือทับกัน*
 
 ### 6.3 End-to-End System Performance
 
@@ -348,20 +348,20 @@ Testing with motion blur, simulated through image processing to represent fast-m
 
 Evaluation with different license plate designs, including older plates with faded characters, decorative borders, and non-standard fonts, showed that the system maintains reasonable performance across variations. Detection accuracy remained above 92% for all plate designs tested, while character recognition accuracy varied from 85% to 93% depending on plate condition and font characteristics.
 
-**[FIGURE PLACEHOLDER 6.6.1: Accuracy vs. Lighting Conditions]**
-*Caption: Line graph showing detection accuracy (blue line) and character recognition accuracy (red line) across different lighting conditions: bright daylight, normal daylight, overcast, indoor lighting, low light, and very low light. The chart demonstrates how accuracy degrades as lighting conditions worsen.*
+**[รูปภาพที่ควรใส่ 6.6.1: กราฟเส้นแสดง Accuracy เทียบกับสภาพแสง]**
+*คำอธิบาย: กราฟเส้นแสดง detection accuracy (เส้นสีน้ำเงิน) และ character recognition accuracy (เส้นสีแดง) ในสภาพแสงต่างๆ: แสงแดดจ้า, แสงแดดปกติ, เมฆหมอก, แสงในร่ม, แสงน้อย, และแสงน้อยมาก กราฟแสดงว่าความแม่นยำลดลงเมื่อสภาพแสงแย่ลง*
 
-**[FIGURE PLACEHOLDER 6.6.2: Accuracy vs. Camera Angle]**
-*Caption: Line graph showing detection accuracy (blue line) and character recognition accuracy (red line) as a function of camera angle (0° = perpendicular, 15°, 30°, 45°, 60°, 75°). The chart illustrates that performance remains acceptable up to 45-60 degrees before degrading significantly.*
+**[รูปภาพที่ควรใส่ 6.6.2: กราฟเส้นแสดง Accuracy เทียบกับมุมกล้อง]**
+*คำอธิบาย: กราฟเส้นแสดง detection accuracy (เส้นสีน้ำเงิน) และ character recognition accuracy (เส้นสีแดง) เป็นฟังก์ชันของมุมกล้อง (0° = ตั้งฉาก, 15°, 30°, 45°, 60°, 75°) กราฟแสดงว่าประสิทธิภาพยังอยู่ในระดับที่ยอมรับได้จนถึง 45-60 องศาก่อนที่จะลดลงอย่างมาก*
 
-**[FIGURE PLACEHOLDER 6.6.3: Accuracy vs. Motion Blur Level]**
-*Caption: Line graph showing detection accuracy (blue line) and character recognition accuracy (red line) across different levels of motion blur (none, slight, moderate, severe). The chart shows that detection is more robust to blur than character recognition, which degrades more rapidly.*
+**[รูปภาพที่ควรใส่ 6.6.3: กราฟเส้นแสดง Accuracy เทียบกับระดับ Motion Blur]**
+*คำอธิบาย: กราฟเส้นแสดง detection accuracy (เส้นสีน้ำเงิน) และ character recognition accuracy (เส้นสีแดง) ในระดับ blur จากการเคลื่อนไหวต่างๆ (ไม่มี, เล็กน้อย, ปานกลาง, รุนแรง) กราฟแสดงว่า detection ทนต่อ blur มากกว่าการจดจำตัวอักษร ซึ่งลดลงอย่างรวดเร็วกว่า*
 
-**[FIGURE PLACEHOLDER 6.6.4: Performance Across License Plate Designs]**
-*Caption: Bar chart showing accuracy percentages for different license plate types: standard plates, faded plates, decorative border plates, non-standard fonts, and damaged plates. Separate bars for detection accuracy and recognition accuracy are shown for each plate type.*
+**[รูปภาพที่ควรใส่ 6.6.4: กราฟแท่งแสดง Performance ตามรูปแบบป้ายทะเบียนต่างๆ]**
+*คำอธิบาย: กราฟแท่งแสดงเปอร์เซ็นต์ accuracy สำหรับประเภทป้ายทะเบียนต่างๆ: ป้ายมาตรฐาน, ป้ายจาง, ป้ายมีกรอบตกแต่ง, ป้ายฟอนต์ไม่มาตรฐาน, และป้ายเสียหาย แสดงแถบแยกสำหรับ detection accuracy และ recognition accuracy สำหรับแต่ละประเภทป้าย*
 
-**[FIGURE PLACEHOLDER 6.6.5: Example Images Under Various Conditions]**
-*Caption: Grid of example images showing the system's performance under different challenging conditions. Each row represents a different condition type (low light, extreme angle, motion blur, different plate designs), with examples of successful recognition and failure cases shown side by side.*
+**[รูปภาพที่ควรใส่ 6.6.5: ตารางภาพตัวอย่างภายใต้เงื่อนไขต่างๆ]**
+*คำอธิบาย: ตารางภาพตัวอย่างแสดงประสิทธิภาพของระบบภายใต้เงื่อนไขที่ท้าทายต่างๆ แต่ละแถวแสดงประเภทเงื่อนไขที่แตกต่างกัน (แสงน้อย, มุมสุดขั้ว, motion blur, รูปแบบป้ายต่างๆ) พร้อมตัวอย่างการจดจำที่สำเร็จและล้มเหลวแสดงเคียงข้างกัน*
 
 ### 6.7 Computational Performance Analysis
 
