@@ -16,11 +16,21 @@ if not DATABASE_URL:
     DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # 3) สร้าง engine + session ให้รองรับทั้ง Postgres/SQLite
-engine_kwargs = dict(pool_pre_ping=True)
+engine_kwargs = dict(
+    pool_pre_ping=True,
+    pool_size=10,  # เพิ่ม pool size
+    max_overflow=20,  # เพิ่ม overflow
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    pool_timeout=30
+)
 
 # กรณี SQLite ให้ใส่ connect_args เพิ่ม (กัน thread issue)
 if DATABASE_URL.startswith("sqlite:///") or DATABASE_URL.startswith("sqlite://"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
+    # SQLite ไม่ต้องการ pool settings
+    engine_kwargs.pop("pool_size", None)
+    engine_kwargs.pop("max_overflow", None)
+    engine_kwargs.pop("pool_recycle", None)
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 

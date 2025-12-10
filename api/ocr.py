@@ -112,13 +112,13 @@ def run_ocr_on_bbox(img: np.ndarray, x: int, y: int, w: int, h: int) -> str:
 
     roi = img[y:y+h, x:x+w].copy()
 
-    # upscale มากขึ้นเพื่อช่วย OCR (ขนาดเป้าหมาย: 300px)
-    target_height = 300
+    # upscale มากขึ้นเพื่อช่วย OCR (ขนาดเป้าหมาย: 400px - เพิ่มจาก 300px)
+    target_height = 400
     if h > 0:
-        scale = max(2, target_height / h)
+        scale = max(3, target_height / h)  # เพิ่ม minimum scale จาก 2 เป็น 3
         new_w = int(w * scale)
         new_h = int(h * scale)
-        roi = cv2.resize(roi, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+        roi = cv2.resize(roi, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)  # ใช้ LANCZOS4 แทน CUBIC เพื่อความคมชัด
         print(f"DEBUG OCR upscale: {w}x{h} -> {new_w}x{new_h} (scale={scale:.1f}x)", flush=True)
 
     variants: List[np.ndarray] = []

@@ -8,8 +8,9 @@ echo "=================================================="
 
 # Set environment variables (using SQLite for local development)
 export DATABASE_URL="sqlite:///./data.db"
-export ARDUINO_PORT="/dev/cu.usbserial-0001"
-export ARDUINO_BAUD="9600"
+export SERIAL_ENABLED="true"
+export SERIAL_PORT="/dev/cu.usbmodem11201"  # macOS: /dev/cu.usbmodem*, Linux: /dev/ttyACM0
+export SERIAL_BAUD="115200"                  # Must match Arduino Serial.begin(115200)
 export GATE_MODE="per_plate_cooldown"
 export GATE_COOLDOWN_SEC="10"
 export VIDEO_MIN_LETTERS="2"
@@ -33,12 +34,15 @@ fi
 echo "✅ Models found"
 echo "✅ Using SQLite database: data.db"
 echo ""
-echo "🚀 Starting server on http://0.0.0.0:8000"
+# Get port from environment or use default 8001
+PORT=${APP_PORT:-8001}
+
+echo "🚀 Starting server on http://0.0.0.0:${PORT}"
 echo "   Press CTRL+C to stop"
 echo ""
 
 # Start the server
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn api.main:app --host 0.0.0.0 --port ${PORT} --reload
 
 
 

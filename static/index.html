@@ -3,19 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚗 Thai License Plate Recognition System</title>
-    <meta name="description" content="Advanced AI-powered Thai license plate recognition system with real-time detection and Arduino gate control">
+    <title>PSU License Plate Recognition System | มหาวิทยาลัยสงขลานครินทร์</title>
+    <meta name="description" content="ระบบจดจำป้ายทะเบียนอัจฉริยะด้วย AI - มหาวิทยาลัยสงขลานครินทร์ (Prince of Songkla University)">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body>
-    <div class="container">
+    <!-- Login Page (Full Screen) -->
+    <div id="loginPage" class="login-page">
+        <div class="login-background">
+            <div class="login-header">
+                <div class="psu-logo-large">PSU</div>
+                <h1 class="login-title">ระบบจดจำป้ายทะเบียน</h1>
+                <h2 class="login-subtitle">Thai License Plate Recognition System</h2>
+                <p class="login-university">มหาวิทยาลัยสงขลานครินทร์</p>
+                <p class="login-university-en">Prince of Songkla University</p>
+            </div>
+            
+            <div class="login-modal">
+                <h2 class="login-form-title">เข้าสู่ระบบ</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>ชื่อผู้ใช้:</label>
+                        <input type="text" id="loginUsername" required autocomplete="username" placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label>รหัสผ่าน:</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="••••••••">
+                            <span class="password-toggle" onclick="togglePassword('loginPassword')" style="cursor: pointer;">👁️</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-login">
+                        <span>เข้าสู่ระบบ</span>
+                        <span class="arrow">→</span>
+                    </button>
+                </form>
+                <p class="hint">ยังไม่มีบัญชี? <a href="#" id="showRegister" class="register-link">สมัครสมาชิก</a></p>
+                <div id="loginError" class="error-message" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Page (Full Screen) -->
+    <div id="registerPage" class="register-page">
+        <div class="login-background">
+            <div class="login-header">
+                <div class="psu-logo-large">PSU</div>
+                <h1 class="login-title">ระบบจดจำป้ายทะเบียน</h1>
+                <h2 class="login-subtitle">Thai License Plate Recognition System</h2>
+                <p class="login-university">มหาวิทยาลัยสงขลานครินทร์</p>
+                <p class="login-university-en">Prince of Songkla University</p>
+            </div>
+            
+            <div class="login-modal">
+                <h2 class="login-form-title">สมัครสมาชิก</h2>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label>ชื่อผู้ใช้:</label>
+                        <input type="text" id="registerUsername" required autocomplete="username" minlength="3" placeholder="อย่างน้อย 3 ตัวอักษร">
+                    </div>
+                    <div class="form-group">
+                        <label>อีเมล:</label>
+                        <input type="email" id="registerEmail" required autocomplete="email" placeholder="example@psu.ac.th">
+                    </div>
+                    <div class="form-group">
+                        <label>รหัสผ่าน:</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="registerPassword" required autocomplete="new-password" minlength="6" placeholder="อย่างน้อย 6 ตัวอักษร">
+                            <span class="password-toggle" onclick="togglePassword('registerPassword')">👁️</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>ยืนยันรหัสผ่าน:</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="registerConfirmPassword" required autocomplete="new-password" minlength="6" placeholder="กรุณายืนยันรหัสผ่าน">
+                            <span class="password-toggle" onclick="togglePassword('registerConfirmPassword')">👁️</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-login">
+                        <span>สมัครสมาชิก</span>
+                        <span class="arrow">→</span>
+                    </button>
+                </form>
+                <p class="hint">มีบัญชีอยู่แล้ว? <a href="#" id="showLogin" class="register-link">เข้าสู่ระบบ</a></p>
+                <div id="registerError" class="error-message" style="display:none;"></div>
+                <div id="registerSuccess" class="success-message" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container (Hidden until logged in) -->
+    <div id="mainApp" class="container" style="display:none;">
         <!-- Header -->
         <header>
             <div class="header-content">
-                <h1>🚗 Thai License Plate Recognition</h1>
-                <p class="header-subtitle">AI-Powered Detection System</p>
+                <div class="psu-logo">
+                    <div class="psu-logo-text">
+                        <div class="psu-logo-main">PSU</div>
+                        <div class="psu-logo-sub">มหาวิทยาลัยสงขลานครินทร์</div>
+                    </div>
+                    <div class="qs-badge">QS RATED 4 STARS EXCELLENT</div>
+                </div>
             </div>
             <div class="user-info">
                 <span id="username">Guest</span>
@@ -23,62 +113,17 @@
             </div>
         </header>
 
-        <!-- Login Modal -->
-        <div id="loginModal" class="modal">
-            <div class="modal-content">
-                <h2>เข้าสู่ระบบ</h2>
-                <form id="loginForm">
-                    <div class="form-group">
-                        <label>ชื่อผู้ใช้:</label>
-                        <input type="text" id="loginUsername" required autocomplete="username">
-                    </div>
-                    <div class="form-group">
-                        <label>รหัสผ่าน:</label>
-                        <input type="password" id="loginPassword" required autocomplete="current-password">
-                    </div>
-                    <button type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
-                </form>
-                <p class="hint">ยังไม่มีบัญชี? <a href="#" id="showRegister" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">สมัครสมาชิก</a></p>
-                <div id="loginError" style="display:none; margin-top: 15px; padding: 10px; background: #fee; border-radius: 8px; color: var(--danger-color); text-align: center;"></div>
-            </div>
-        </div>
-
-        <!-- Register Modal -->
-        <div id="registerModal" class="modal">
-            <div class="modal-content">
-                <h2>สมัครสมาชิก</h2>
-                <form id="registerForm">
-                    <div class="form-group">
-                        <label>ชื่อผู้ใช้:</label>
-                        <input type="text" id="registerUsername" required autocomplete="username" minlength="3">
-                        <small style="color: var(--text-light);">อย่างน้อย 3 ตัวอักษร</small>
-                    </div>
-                    <div class="form-group">
-                        <label>อีเมล:</label>
-                        <input type="email" id="registerEmail" required autocomplete="email">
-                    </div>
-                    <div class="form-group">
-                        <label>รหัสผ่าน:</label>
-                        <input type="password" id="registerPassword" required autocomplete="new-password" minlength="6">
-                        <small style="color: var(--text-light);">อย่างน้อย 6 ตัวอักษร</small>
-                    </div>
-                    <div class="form-group">
-                        <label>ยืนยันรหัสผ่าน:</label>
-                        <input type="password" id="registerConfirmPassword" required autocomplete="new-password" minlength="6">
-                    </div>
-                    <button type="submit" class="btn btn-primary">สมัครสมาชิก</button>
-                </form>
-                <p class="hint">มีบัญชีอยู่แล้ว? <a href="#" id="showLogin" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">เข้าสู่ระบบ</a></p>
-                <div id="registerError" style="display:none; margin-top: 15px; padding: 10px; background: #fee; border-radius: 8px; color: var(--danger-color); text-align: center;"></div>
-                <div id="registerSuccess" style="display:none; margin-top: 15px; padding: 10px; background: #efe; border-radius: 8px; color: var(--success-color); text-align: center;"></div>
-            </div>
-        </div>
-
         <!-- Navigation -->
         <nav class="tabs">
-            <button class="tab-btn active" data-tab="upload">📤 Upload</button>
-            <button class="tab-btn" data-tab="records">📊 Records</button>
-            <button class="tab-btn admin-only" data-tab="admin" style="display:none;">⚙️ Admin</button>
+            <button class="tab-btn active" data-tab="upload">
+                <span>📤</span> Upload
+            </button>
+            <button class="tab-btn" data-tab="records">
+                <span>📊</span> Records
+            </button>
+            <button class="tab-btn admin-only" data-tab="admin" style="display:none;">
+                <span>⚙️</span> Admin
+            </button>
         </nav>
 
         <!-- Upload Tab -->
@@ -86,8 +131,8 @@
             <div class="upload-section">
                 <!-- User: Only Image Upload -->
                 <div id="userUploadSection">
-                    <h2>📤 อัปโหลดรูปภาพป้ายทะเบียน</h2>
-                    <p style="color: var(--text-light); margin-bottom: 20px;">
+                    <h2 style="color: #1e3a8a; font-size: 24px; font-weight: 700; margin-bottom: 10px;">อัปโหลดรูปภาพป้ายทะเบียน</h2>
+                    <p style="color: #64748b; margin-bottom: 30px; font-size: 14px;">
                         กรุณาอัปโหลดรูปภาพป้ายทะเบียนรถจักรยานยนต์
                     </p>
                 </div>
@@ -158,16 +203,19 @@
                 <!-- File Upload Section -->
                 <div id="fileUploadSection">
                     <div class="upload-area" id="uploadArea">
-                        <input type="file" id="fileInput" accept="image/*" class="user-upload-input" hidden>
+                        <input type="file" id="fileInput" accept="image/*,video/*" class="user-upload-input" hidden>
                         <input type="file" id="fileInputAdmin" accept="image/*,video/*" class="admin-only" hidden style="display: none;">
-                        <p>📁 Click to select or drag & drop file here</p>
-                        <small class="user-upload-hint">Supported: JPG, PNG</small>
+                        <div id="fileInfo" style="display: none; margin-bottom: 15px; padding: 10px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+                            <p style="margin: 0; color: #1e3a8a; font-weight: 500;" id="fileName"></p>
+                        </div>
+                        <p id="uploadText">📁 Click to select or drag & drop file here</p>
+                        <small class="user-upload-hint">Supported: JPG, PNG, MP4, AVI</small>
                         <small class="admin-only" style="display: none;">Supported: JPG, PNG, MP4, AVI</small>
                     </div>
                     
-                    <!-- Video Player (Admin Only) -->
+                    <!-- Video Player (Admin Only - for real-time detection) -->
                     <div id="videoPlayerSection" class="admin-only" style="display: none;">
-                        <h3>📹 Video Player</h3>
+                        <h3>📹 Video Player (Real-time Detection)</h3>
                         <video id="videoPlayer" controls style="width: 100%; max-width: 800px; border-radius: 12px; margin: 20px auto; display: block;">
                             Your browser does not support the video tag.
                         </video>
@@ -177,10 +225,12 @@
                         </div>
                     </div>
 
-                    <div id="preview" style="display:none;">
-                        <h3>Preview:</h3>
-                        <img id="imagePreview" style="max-width: 100%; display:none; border-radius: 12px;">
-                        <video id="videoPreview" controls style="max-width: 100%; display:none; border-radius: 12px;"></video>
+                    <div id="preview" style="display:none; margin-top: 30px;">
+                        <h3 style="color: #1e3a8a; font-size: 18px; font-weight: 600; margin-bottom: 15px;">Preview:</h3>
+                        <div style="text-align: center; background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb;">
+                            <img id="imagePreview" style="max-width: 100%; max-height: 400px; display:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 0 auto;">
+                            <video id="videoPreview" controls style="max-width: 100%; max-height: 400px; display:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 0 auto;"></video>
+                        </div>
                     </div>
 
                     <button id="uploadBtn" class="btn btn-primary" style="display:none;">🚀 Process</button>
@@ -332,13 +382,30 @@
 
         <!-- Real-time Updates -->
         <div id="realtimePanel" class="realtime-panel">
-            <h4>🔴 Real-time Updates <span id="wsStatus" class="status-badge disconnected">Disconnected</span></h4>
-            <div id="realtimeLog"></div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="color: #ef4444; font-size: 18px;">🔴</span>
+                <span style="font-weight: 600;">Real-time Updates</span>
+            </div>
+            <button id="wsStatus" class="status-badge-btn disconnected" style="background: #ef4444; color: white; border: none; padding: 6px 16px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: default;">DISCONNECTED</button>
+            <div id="realtimeLog" style="display: none;"></div>
         </div>
     </div>
 
     <script src="/static/js/app.js"></script>
     <script>
+        // Toggle password visibility
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const toggle = input.nextElementSibling;
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggle.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                toggle.textContent = '👁️';
+            }
+        }
+        
         // Toggle between file upload and camera
         document.querySelectorAll('input[name="uploadType"]').forEach(radio => {
             radio.addEventListener('change', (e) => {

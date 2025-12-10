@@ -5,14 +5,15 @@
 }
 
 :root {
-    --primary-color: #6366f1;
-    --primary-hover: #4f46e5;
-    --secondary-color: #10b981;
-    --secondary-hover: #059669;
+    /* PSU Brand Colors - สีน้ำเงินเข้มแบบเว็บไซต์ PSU */
+    --primary-color: #1e3a8a; /* Dark Blue */
+    --primary-hover: #1e40af;
+    --secondary-color: #3b82f6; /* Blue */
+    --secondary-hover: #2563eb;
     --danger-color: #ef4444;
     --danger-hover: #dc2626;
-    --dark-bg: #1e293b;
-    --darker-bg: #0f172a;
+    --dark-bg: #1e293b; /* Dark Blue */
+    --darker-bg: #0f172a; /* Darker Blue */
     --light-bg: #f8fafc;
     --border-color: #e2e8f0;
     --text-dark: #1e293b;
@@ -20,18 +21,21 @@
     --success-color: #22c55e;
     --warning-color: #f59e0b;
     --info-color: #3b82f6;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 1px 2px 0 rgba(30, 58, 138, 0.1);
+    --shadow-md: 0 4px 6px -1px rgba(30, 58, 138, 0.15), 0 2px 4px -1px rgba(30, 58, 138, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(30, 58, 138, 0.2), 0 4px 6px -2px rgba(30, 58, 138, 0.15);
+    --shadow-xl: 0 20px 25px -5px rgba(30, 58, 138, 0.25), 0 10px 10px -5px rgba(30, 58, 138, 0.2);
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-    background-attachment: fixed;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, 'Sarabun', sans-serif;
+    background: #1e3a8a;
+    background-image: 
+        radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+    background-size: 20px 20px;
     min-height: 100vh;
-    padding: 20px;
+    margin: 0;
+    padding: 0;
     position: relative;
     overflow-x: hidden;
 }
@@ -54,14 +58,26 @@ body::before {
 }
 
 .container {
-    max-width: 1400px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     background: white;
-    border-radius: 24px;
-    box-shadow: var(--shadow-xl);
+    min-height: 100vh;
     overflow: hidden;
     position: relative;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    animation: fadeInUp 0.5s ease-out;
+    padding-bottom: 60px; /* Space for realtime panel */
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .container::before {
@@ -71,20 +87,49 @@ body::before {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--warning-color));
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color));
     border-radius: 24px 24px 0 0;
+}
+
+/* Top Navigation Bar (PSU Style) */
+.top-nav {
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+.top-nav-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 20px;
+    align-items: center;
+}
+
+.top-nav a {
+    color: #666;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.top-nav a:hover {
+    color: var(--primary-color);
 }
 
 /* Header */
 header {
-    background: linear-gradient(135deg, var(--darker-bg) 0%, var(--dark-bg) 100%);
-    color: white;
-    padding: 24px 32px;
+    background: white;
+    color: #333;
+    padding: 15px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     position: relative;
-    overflow: hidden;
+    border-bottom: 2px solid #1e3a8a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 header::before {
@@ -94,7 +139,7 @@ header::before {
     right: -10%;
     width: 300px;
     height: 300px;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(107, 44, 145, 0.3) 0%, rgba(255, 215, 0, 0.2) 50%, transparent 70%);
     border-radius: 50%;
     animation: pulse 3s ease-in-out infinite;
 }
@@ -107,23 +152,64 @@ header::before {
 .header-content {
     position: relative;
     z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.psu-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.psu-logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.psu-logo-main {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.psu-logo-sub {
+    font-size: 14px;
+    color: #333;
+    margin: 0;
+    font-weight: 400;
+}
+
+.qs-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #ffd700;
+    color: #1e3a8a;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-left: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 header h1 {
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    margin-bottom: 4px;
-    background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 0;
+    margin: 0;
+}
+
+header {
+    animation: slideDown 0.4s ease-out;
 }
 
 .header-subtitle {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.7);
+    color: #666;
     letter-spacing: 1.5px;
     text-transform: uppercase;
 }
@@ -147,6 +233,339 @@ header h1 {
 }
 
 /* Modal */
+/* Login Page (Full Screen) - PSU Style */
+.login-page, .register-page {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.login-page.active, .register-page.active {
+    display: block;
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.login-background {
+    min-height: 100vh;
+    background: #1e3a8a; /* Dark blue background */
+    background-image: 
+        radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+    background-size: 20px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    position: relative;
+}
+
+.login-header {
+    text-align: center;
+    color: white;
+    margin-bottom: 40px;
+    z-index: 1;
+    animation: slideDown 0.6s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.psu-logo-large {
+    font-size: 48px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+    animation: pulse 2s ease-in-out infinite;
+    display: inline-block;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.login-title {
+    font-size: 32px;
+    font-weight: 600;
+    color: white;
+    margin: 10px 0;
+    line-height: 1.2;
+}
+
+.login-subtitle {
+    font-size: 18px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 5px 0;
+}
+
+.login-university {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 10px 0 5px 0;
+}
+
+.login-university-en {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.75);
+    margin: 0;
+}
+
+.login-modal {
+    background: white;
+    border-radius: 12px;
+    padding: 40px;
+    width: 100%;
+    max-width: 450px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    z-index: 1;
+    animation: slideUp 0.6s ease-out 0.2s both;
+    transform-origin: center;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.login-form-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin: 0 0 30px 0;
+    text-align: center;
+}
+
+.login-modal .form-group {
+    margin-bottom: 20px;
+}
+
+.login-modal .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.login-modal .form-group input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+    background: white;
+    color: #333;
+}
+
+.login-modal .form-group input:hover {
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+.login-modal .form-group input:focus {
+    outline: none;
+    border-color: #1e3a8a;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.2);
+    transform: translateY(-1px);
+}
+
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 18px;
+    user-select: none;
+    transition: transform 0.2s ease;
+}
+
+.password-toggle:hover {
+    transform: translateY(-50%) scale(1.2);
+}
+
+.btn-login {
+    width: 100%;
+    padding: 14px 24px;
+    background: #1e3a8a;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-login::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn-login:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.btn-login:hover {
+    background: #1e40af;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(30, 58, 138, 0.5);
+}
+
+.btn-login:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(30, 58, 138, 0.3);
+}
+
+.btn-login .arrow {
+    transition: transform 0.3s ease;
+}
+
+.btn-login:hover .arrow {
+    transform: translateX(5px);
+}
+
+.btn-login .arrow {
+    font-size: 18px;
+}
+
+.hint {
+    text-align: center;
+    margin-top: 20px;
+    color: #666;
+    font-size: 14px;
+}
+
+.register-link {
+    color: #1e3a8a;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    position: relative;
+    display: inline-block;
+}
+
+.register-link::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: #1e3a8a;
+    transition: width 0.3s ease;
+}
+
+.register-link:hover {
+    color: #1e40af;
+    transform: translateX(3px);
+}
+
+.register-link:hover::after {
+    width: 100%;
+}
+
+.register-link:hover {
+    text-decoration: underline;
+}
+
+.error-message, .success-message {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    animation: shake 0.5s ease-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.success-message {
+    animation: slideInDown 0.5s ease-out;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.error-message {
+    background: #fee;
+    color: var(--danger-color);
+}
+
+.success-message {
+    background: #efe;
+    color: var(--success-color);
+}
+
+/* Keep modal for other uses */
 .modal {
     display: none;
     position: fixed;
@@ -183,7 +602,7 @@ header h1 {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color));
     border-radius: 20px 20px 0 0;
 }
 
@@ -253,14 +672,29 @@ header h1 {
 }
 
 .tab-btn:hover {
-    background: linear-gradient(to bottom, rgba(99, 102, 241, 0.05), transparent);
-    color: var(--text-dark);
+    background: linear-gradient(to bottom, rgba(30, 58, 138, 0.05), transparent);
+    color: #1e3a8a;
+    transform: translateY(-2px);
+}
+
+.tab-btn:hover::after {
+    width: 60%;
 }
 
 .tab-btn.active {
     background: white;
-    color: var(--primary-color);
+    color: #1e3a8a;
     font-weight: 600;
+}
+
+.tab-btn.active {
+    color: #1e3a8a;
+    font-weight: 600;
+}
+
+.tab-btn.active::after {
+    width: 80%;
+    background: #1e3a8a;
 }
 
 .tab-btn.active::before {
@@ -271,11 +705,22 @@ header h1 {
 .tab-content {
     display: none;
     padding: 30px;
-    animation: fadeIn 0.3s;
+    animation: fadeInSlide 0.4s ease-out;
 }
 
 .tab-content.active {
     display: block;
+}
+
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 @keyframes fadeIn {
@@ -303,16 +748,21 @@ header h1 {
 }
 
 .upload-area {
-    border: 3px dashed var(--border-color);
-    border-radius: 16px;
-    padding: 60px;
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 60px 40px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     margin-bottom: 20px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.02) 0%, rgba(16, 185, 129, 0.02) 100%);
+    background: #f9fafb;
     position: relative;
     overflow: hidden;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .upload-area::before {
@@ -687,11 +1137,38 @@ table tbody tr:last-child td {
 
 /* Real-time Panel */
 .realtime-panel {
-    background: linear-gradient(135deg, var(--darker-bg) 0%, var(--dark-bg) 100%);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1e3a8a;
     color: white;
-    padding: 20px 32px;
-    position: relative;
-    overflow: hidden;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.status-badge-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: default;
+    transition: all 0.3s ease;
+}
+
+.status-badge-btn.connected {
+    background: #22c55e !important;
+}
+
+.status-badge-btn.disconnected {
+    background: #ef4444 !important;
 }
 
 .realtime-panel::before {
@@ -828,14 +1305,41 @@ table tbody tr:last-child td {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    background: #1e3a8a;
     color: white;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn-primary:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .btn-primary:hover {
+    background: #1e40af;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px rgba(30, 58, 138, 0.5);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
 }
 
 .btn-secondary {

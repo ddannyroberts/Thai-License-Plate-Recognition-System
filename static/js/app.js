@@ -7,8 +7,15 @@ let totalPages = 1;
 const pageLimit = 20;
 let ws = null;
 let reconnectInterval = null;
-let sessionToken = localStorage.getItem('session_token') || null;
+// Clear invalid session tokens on load
+let storedToken = localStorage.getItem('session_token');
+let sessionToken = storedToken || null;
 let currentUser = null;
+
+// Clear session if server was restarted (token might be invalid)
+if (storedToken) {
+    // Will be validated in checkAuth()
+}
 
 // Camera state
 let cameraStream = null;
@@ -28,17 +35,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup event listeners
     setupEventListeners();
     
-    // Connect WebSocket
-    connectWebSocket();
-    
-    // Load initial data
-    loadRecords();
-    loadStats();
+    // Connect WebSocket (only if logged in)
+    if (sessionToken) {
+        connectWebSocket();
+        loadRecords();
+        loadStats();
+    }
 });
 
 // ===== Authentication =====
 async function checkAuth() {
     if (!sessionToken) {
+        showLoginButton();
         showLoginModal();
         return;
     }
@@ -50,19 +58,42 @@ async function checkAuth() {
         if (data.success) {
             currentUser = data.user;
             updateUserUI();
+            // Connect WebSocket and load data after successful login
+            connectWebSocket();
+            loadRecords();
+            loadStats();
         } else {
+            // Invalid token, clear it
+            localStorage.removeItem('session_token');
+            sessionToken = null;
+            showLoginButton();
             showLoginModal();
         }
     } catch (error) {
         console.error('Auth check failed:', error);
+        localStorage.removeItem('session_token');
+        sessionToken = null;
+        showLoginButton();
         showLoginModal();
     }
 }
 
+function showLoginButton() {
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (loginBtn) loginBtn.style.display = 'inline-block';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+}
+
 function updateUserUI() {
     if (currentUser) {
+        // Hide login page and show main app
+        hideLoginModal();
+        
         document.getElementById('username').textContent = currentUser.username;
         document.getElementById('logoutBtn').style.display = 'inline-block';
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) loginBtn.style.display = 'none';
         
         // Show/hide UI based on role
         if (currentUser.role === 'admin') {
@@ -89,10 +120,10 @@ function updateUserUI() {
             document.getElementById('fileInputAdmin').style.display = 'none';
             document.getElementById('fileInput').style.display = 'block';
             
-            // Make file input accept only images for users
+            // Allow users to upload both images and videos
             const userInput = document.getElementById('fileInput');
             if (userInput) {
-                userInput.accept = 'image/*';
+                userInput.accept = 'image/*,video/*';
             }
         }
         
@@ -101,12 +132,30 @@ function updateUserUI() {
 }
 
 function showLoginModal() {
-    document.getElementById('loginModal').classList.add('active');
+    document.getElementById('loginPage').classList.add('active');
+    document.getElementById('registerPage').classList.remove('active');
+    document.getElementById('mainApp').style.display = 'none';
 }
 
 function hideLoginModal() {
-    document.getElementById('loginModal').classList.remove('active');
-    document.getElementById('registerModal').classList.remove('active');
+    document.getElementById('loginPage').classList.remove('active');
+    document.getElementById('registerPage').classList.remove('active');
+    document.getElementById('mainApp').style.display = 'block';
+}
+
+function showRegisterPage() {
+    document.getElementById('registerPage').classList.add('active');
+    document.getElementById('loginPage').classList.remove('active');
+    document.getElementById('mainApp').style.display = 'none';
+}
+
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    if (input.type === 'password') {
+        input.type = 'text';
+    } else {
+        input.type = 'password';
+    }
 }
 
 // ===== Event Listeners =====
@@ -143,10 +192,12 @@ function setupEventListeners() {
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            fileInput.files = e.dataTransfer.files;
-            handleFileSelect();
+        const activeInput = (currentUser && currentUser.role === 'admin') ? fileInputAdmin : fileInput;
+        if (activeInput && e.dataTransfer.files.length > 0) {
+            activeInput.files = e.dataTransfer.files;
+            // Create a synthetic event to pass to handleFileSelect
+            const syntheticEvent = { target: activeInput };
+            handleFileSelect(syntheticEvent);
         }
     });
     
@@ -222,13 +273,11 @@ function setupEventListeners() {
     document.getElementById('logoutBtn')?.addEventListener('click', handleLogout);
     document.getElementById('showRegister')?.addEventListener('click', (e) => {
         e.preventDefault();
-        document.getElementById('loginModal').classList.remove('active');
-        document.getElementById('registerModal').classList.add('active');
+        showRegisterPage();
     });
     document.getElementById('showLogin')?.addEventListener('click', (e) => {
         e.preventDefault();
-        document.getElementById('registerModal').classList.remove('active');
-        document.getElementById('loginModal').classList.add('active');
+        showLoginModal();
     });
 }
 
@@ -554,58 +603,113 @@ function highlightDetection(element, ctx) {
 }
 
 // ===== File Upload =====
-function handleFileSelect() {
+function handleFileSelect(e) {
     // Get the active file input (admin or user)
-    const activeInput = (currentUser && currentUser.role === 'admin' && document.getElementById('fileInputAdmin')) 
+    const activeInput = e?.target || ((currentUser && currentUser.role === 'admin' && document.getElementById('fileInputAdmin')) 
         ? document.getElementById('fileInputAdmin') 
-        : document.getElementById('fileInput');
+        : document.getElementById('fileInput'));
     
-    const file = activeInput?.files[0];
+    const file = activeInput?.files?.[0];
     
-    if (!file) return;
+    if (!file) {
+        // Clear preview if no file
+        const preview = document.getElementById('preview');
+        if (preview) preview.style.display = 'none';
+        return;
+    }
     
-    // Show preview
+    // Show preview immediately
     const preview = document.getElementById('preview');
     const imagePreview = document.getElementById('imagePreview');
     const videoPreview = document.getElementById('videoPreview');
     const videoPlayerSection = document.getElementById('videoPlayerSection');
     const videoPlayer = document.getElementById('videoPlayer');
+    const uploadBtn = document.getElementById('uploadBtn');
     
-    preview.style.display = 'block';
+    // Always show preview section
+    if (preview) preview.style.display = 'block';
+    
+    // Show file name
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const uploadText = document.getElementById('uploadText');
+    if (fileInfo && fileName) {
+        fileName.textContent = `📄 ${file.name}`;
+        fileInfo.style.display = 'block';
+    }
+    if (uploadText) {
+        uploadText.textContent = '📁 Click to select or drag & drop file here';
+    }
     
     if (file.type.startsWith('image/')) {
-        imagePreview.src = URL.createObjectURL(file);
-        imagePreview.style.display = 'block';
-        videoPreview.style.display = 'none';
+        // Show image preview
+        if (imagePreview) {
+            // Revoke old URL if exists
+            if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
+                URL.revokeObjectURL(imagePreview.src);
+            }
+            imagePreview.src = URL.createObjectURL(file);
+            imagePreview.style.display = 'block';
+            imagePreview.onload = () => {
+                // Smooth animation
+                imagePreview.style.opacity = '0';
+                imagePreview.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => {
+                    imagePreview.style.opacity = '1';
+                }, 10);
+            };
+        }
+        if (videoPreview) videoPreview.style.display = 'none';
         if (videoPlayerSection) videoPlayerSection.style.display = 'none';
         
         // Show upload button for images
-        document.getElementById('uploadBtn').style.display = 'inline-block';
+        if (uploadBtn) uploadBtn.style.display = 'inline-block';
         
-    } else if (file.type.startsWith('video/') && currentUser && currentUser.role === 'admin') {
-        // Admin only: Video playback with real-time detection
+    } else if (file.type.startsWith('video/')) {
+        // Video playback (both user and admin)
         const videoURL = URL.createObjectURL(file);
         
-        // Show video player
-        if (videoPlayerSection) videoPlayerSection.style.display = 'block';
-        if (videoPlayer) {
-            videoPlayer.src = videoURL;
-            
-            // Start video detection when video plays
-            videoPlayer.onloadedmetadata = () => {
-                startVideoDetection(videoPlayer);
-            };
+        // Show video preview
+        if (videoPreview) {
+            // Revoke old URL if exists
+            if (videoPreview.src && videoPreview.src.startsWith('blob:')) {
+                URL.revokeObjectURL(videoPreview.src);
+            }
+            videoPreview.src = videoURL;
+            videoPreview.style.display = 'block';
         }
         
-        videoPreview.style.display = 'none';
-        imagePreview.style.display = 'none';
+        // Show video player section for admin (real-time detection)
+        if (currentUser && currentUser.role === 'admin' && videoPlayerSection) {
+            videoPlayerSection.style.display = 'block';
+            if (videoPlayer) {
+                // Revoke old URL if exists
+                if (videoPlayer.src && videoPlayer.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(videoPlayer.src);
+                }
+                videoPlayer.src = videoURL;
+                
+                // Start video detection when video plays (admin only)
+                videoPlayer.onloadedmetadata = () => {
+                    startVideoDetection(videoPlayer);
+                };
+            }
+        } else if (videoPlayerSection) {
+            videoPlayerSection.style.display = 'none';
+        }
         
-        // Don't show upload button for videos (we detect while playing)
-        document.getElementById('uploadBtn').style.display = 'none';
+        if (imagePreview) imagePreview.style.display = 'none';
+        
+        // Show upload button for videos (to process the entire video)
+        if (uploadBtn) uploadBtn.style.display = 'inline-block';
     }
     
     // Hide result
-    document.getElementById('result').style.display = 'none';
+    const result = document.getElementById('result');
+    if (result) result.style.display = 'none';
+    
+    // Show notification
+    showNotification(`File selected: ${file.name}`, 'info');
 }
 
 // Video detection state
@@ -730,9 +834,9 @@ async function processUpload() {
         return;
     }
     
-    // Users can only upload images
-    if (currentUser && currentUser.role !== 'admin' && !file.type.startsWith('image/')) {
-        showNotification('Users can only upload image files', 'error');
+    // Validate file type (images or videos)
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        showNotification('Please upload an image or video file', 'error');
         return;
     }
     
@@ -745,7 +849,8 @@ async function processUpload() {
         formData.append('file', file);
         
         // Choose endpoint based on file type (only for admin)
-        const endpoint = (currentUser && currentUser.role === 'admin' && file.type.startsWith('video/')) 
+        // Use /detect-video for videos, /detect for images
+        const endpoint = file.type.startsWith('video/') 
             ? '/detect-video' 
             : '/detect';
         
@@ -753,6 +858,11 @@ async function processUpload() {
             method: 'POST',
             body: formData
         });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `HTTP ${response.status}`);
+        }
         
         const result = await response.json();
         
@@ -808,18 +918,37 @@ function showVideoResult(result) {
     const resultDiv = document.getElementById('result');
     resultDiv.style.display = 'block';
     
-    resultDiv.innerHTML = `
-        <h3>Video Processing Complete</h3>
-        <div class="result-card">
-            <p><strong>Frames Processed:</strong> ${result.frames_processed}</p>
-            <p><strong>Unique Plates:</strong> ${result.unique_plates.length}</p>
-            <p><strong>Records Saved:</strong> ${result.records_saved}</p>
-            <p><strong>Detected Plates:</strong></p>
-            <ul style="margin-left: 20px;">
-                ${result.unique_plates.map(plate => `<li>${plate}</li>`).join('')}
-            </ul>
-        </div>
-    `;
+    // Check if result has video-specific fields
+    if (result.frames_processed !== undefined) {
+        // Video processing result
+        const uniquePlates = result.unique_plates || [];
+        const framesProcessed = result.frames_processed || 0;
+        const recordsSaved = result.records_saved || 0;
+        
+        resultDiv.innerHTML = `
+            <h3 style="color: #1e3a8a; font-size: 20px; font-weight: 600; margin-bottom: 15px;">📹 Video Processing Complete</h3>
+            <div class="result-card" style="background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb;">
+                <p style="margin: 10px 0;"><strong style="color: #1e3a8a;">Frames Processed:</strong> <span style="color: #64748b;">${framesProcessed}</span></p>
+                <p style="margin: 10px 0;"><strong style="color: #1e3a8a;">Unique Plates Found:</strong> <span style="color: #64748b;">${uniquePlates.length}</span></p>
+                <p style="margin: 10px 0;"><strong style="color: #1e3a8a;">Records Saved:</strong> <span style="color: #64748b;">${recordsSaved}</span></p>
+                ${uniquePlates.length > 0 ? `
+                    <div style="margin-top: 15px;">
+                        <strong style="color: #1e3a8a;">Detected Plates:</strong>
+                        <ul style="margin: 10px 0 0 20px; color: #64748b;">
+                            ${uniquePlates.map(plate => `<li style="margin: 5px 0;">${plate}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : '<p style="margin: 10px 0; color: #64748b;">No license plates detected in video.</p>'}
+            </div>
+        `;
+    } else {
+        // Single frame result (fallback)
+        document.getElementById('plateText').textContent = result.plate_text || 'N/A';
+        document.getElementById('provinceText').textContent = result.province_text || 'N/A';
+        document.getElementById('confidence').textContent = result.confidence 
+            ? (result.confidence * 100).toFixed(2) + ' %' 
+            : 'N/A';
+    }
     
     showNotification('Video processing completed!', 'success');
 }
@@ -1050,8 +1179,11 @@ function connectWebSocket() {
     
     ws.onopen = () => {
         console.log('✅ WebSocket connected');
-        document.getElementById('wsStatus').textContent = 'Connected';
-        document.getElementById('wsStatus').className = 'status-badge connected';
+        const wsStatus = document.getElementById('wsStatus');
+        if (wsStatus) {
+            wsStatus.textContent = 'CONNECTED';
+            wsStatus.className = 'status-badge-btn connected';
+        }
         clearInterval(reconnectInterval);
     };
     
@@ -1066,8 +1198,11 @@ function connectWebSocket() {
     
     ws.onclose = () => {
         console.log('❌ WebSocket disconnected');
-        document.getElementById('wsStatus').textContent = 'Disconnected';
-        document.getElementById('wsStatus').className = 'status-badge disconnected';
+        const wsStatus = document.getElementById('wsStatus');
+        if (wsStatus) {
+            wsStatus.textContent = 'DISCONNECTED';
+            wsStatus.className = 'status-badge-btn disconnected';
+        }
         
         // Auto-reconnect
         reconnectInterval = setInterval(connectWebSocket, 3000);
@@ -1141,9 +1276,14 @@ async function handleLogin(e) {
             localStorage.setItem('session_token', sessionToken);
             currentUser = data.user;
             updateUserUI();
+            hideLoginModal();
             showNotification('Login successful!', 'success');
         } else {
-            showError('loginError', data.message);
+            const errorDiv = document.getElementById('loginError');
+            if (errorDiv) {
+                errorDiv.textContent = data.message;
+                errorDiv.style.display = 'block';
+            }
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -1179,13 +1319,20 @@ async function handleRegister(e) {
         const data = await response.json();
         
         if (data.success) {
-            showSuccess('registerSuccess', data.message);
+            const successDiv = document.getElementById('registerSuccess');
+            if (successDiv) {
+                successDiv.textContent = data.message;
+                successDiv.style.display = 'block';
+            }
             setTimeout(() => {
-                document.getElementById('registerModal').classList.remove('active');
-                document.getElementById('loginModal').classList.add('active');
+                showLoginModal();
             }, 2000);
         } else {
-            showError('registerError', data.message);
+            const errorDiv = document.getElementById('registerError');
+            if (errorDiv) {
+                errorDiv.textContent = data.message;
+                errorDiv.style.display = 'block';
+            }
         }
     } catch (error) {
         console.error('Register error:', error);
@@ -1195,15 +1342,23 @@ async function handleRegister(e) {
 
 async function handleLogout() {
     if (sessionToken) {
-        const formData = new FormData();
-        formData.append('session_token', sessionToken);
-        
-        await fetch('/api/auth/logout', {
-            method: 'POST',
-            body: formData
-        });
+        try {
+            const formData = new FormData();
+            formData.append('session_token', sessionToken);
+            
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                body: formData
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     }
     
+    clearSession();
+}
+
+function clearSession() {
     localStorage.removeItem('session_token');
     sessionToken = null;
     currentUser = null;
@@ -1213,8 +1368,13 @@ async function handleLogout() {
         el.style.display = 'none';
     });
     
+    // Reset UI
+    document.getElementById('username').textContent = 'Guest';
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    
+    showLoginButton();
     showLoginModal();
-    showNotification('Logged out successfully', 'info');
 }
 
 // ===== Utility Functions =====

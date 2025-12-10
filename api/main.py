@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -370,9 +370,20 @@ async def detect(
         from .character_segmentation import read_plate_by_characters
         segmented_text, character_details = read_plate_by_characters(img_for_ocr)
         
+        # Validate result: ต้องมีอย่างน้อย 2 ตัวอักษร และไม่ใช่ noise
         if segmented_text and len(segmented_text) >= 2:
-            plate_text = segmented_text
-            print(f"DEBUG Character Segmentation result: {plate_text} ({len(character_details)} chars)", flush=True)
+            # ตรวจสอบว่าเป็นรูปแบบป้ายทะเบียนที่ถูกต้อง (มีตัวเลขหรือตัวอักษรไทย)
+            import re
+            # Pattern: ต้องมีตัวเลขหรือตัวอักษรไทยอย่างน้อย 2 ตัว
+            valid_pattern = re.compile(r'[ก-ฮ0-9]')
+            valid_chars = valid_pattern.findall(segmented_text)
+            
+            if len(valid_chars) >= 2:
+                plate_text = segmented_text
+                print(f"DEBUG Character Segmentation result: {plate_text} ({len(character_details)} chars)", flush=True)
+            else:
+                print(f"DEBUG: Character segmentation result '{segmented_text}' seems invalid, falling back to full OCR", flush=True)
+                raise ValueError("Segmentation result validation failed")
         else:
             # Fallback to full OCR if segmentation failed
             print("DEBUG: Character segmentation failed, falling back to full OCR", flush=True)
@@ -411,45 +422,48 @@ async def detect(
         cv2.imwrite(plate_img_path, img_for_ocr)
     
     # --- Check if plate has been seen before ---
-    db: Session = next(get_db())
-    normalized_plate = _normalize_plate(plate_text or "")
-    is_new_plate = True
-    seen_count = 1
-    first_seen_at = datetime.utcnow()
-    
-    if normalized_plate:
-        # Check if this plate (normalized) was seen before
-        existing_plate = db.query(PlateRecord).filter(
-            func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
-        ).order_by(PlateRecord.created_at.asc()).first()
+    db = SessionLocal()
+    try:
+        normalized_plate = _normalize_plate(plate_text or "")
+        is_new_plate = True
+        seen_count = 1
+        first_seen_at = datetime.utcnow()
         
-        if existing_plate:
-            is_new_plate = False
-            first_seen_at = existing_plate.first_seen_at or existing_plate.created_at
-            # Count all records with same normalized plate
-            seen_count = db.query(func.count(PlateRecord.id)).filter(
+        if normalized_plate:
+            # Check if this plate (normalized) was seen before
+            existing_plate = db.query(PlateRecord).filter(
                 func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
-            ).scalar() + 1
-    
-    # --- Save DB ---
-    rec = PlateRecord(
-        plate_text=plate_text or "",
-        province_text=province_text or "",
-        confidence=conf,
-        image_path=(image_source if not used_crop else f"{image_source}#crop"),
-        plate_image_path=plate_img_filename,
-        detections_json=json.dumps({
-            "reader": rf, 
-            "detector": det_preds[:5],
-            "character_details": character_details
-        }, ensure_ascii=False),
-        is_new_plate=is_new_plate,
-        seen_count=seen_count,
-        first_seen_at=first_seen_at
-    )
-    db.add(rec)
-    db.commit()
-    db.refresh(rec)
+            ).order_by(PlateRecord.created_at.asc()).first()
+            
+            if existing_plate:
+                is_new_plate = False
+                first_seen_at = existing_plate.first_seen_at or existing_plate.created_at
+                # Count all records with same normalized plate
+                seen_count = db.query(func.count(PlateRecord.id)).filter(
+                    func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
+                ).scalar() + 1
+        
+        # --- Save DB ---
+        rec = PlateRecord(
+            plate_text=plate_text or "",
+            province_text=province_text or "",
+            confidence=conf,
+            image_path=(image_source if not used_crop else f"{image_source}#crop"),
+            plate_image_path=plate_img_filename,
+            detections_json=json.dumps({
+                "reader": rf, 
+                "detector": det_preds[:5],
+                "character_details": character_details
+            }, ensure_ascii=False),
+            is_new_plate=is_new_plate,
+            seen_count=seen_count,
+            first_seen_at=first_seen_at
+        )
+        db.add(rec)
+        db.commit()
+        db.refresh(rec)
+    finally:
+        db.close()
     
     # --- Broadcast via WebSocket ---
     await manager.broadcast({
@@ -635,19 +649,22 @@ async def detect_video(
             plate_img_path = f"uploads/plates/{plate_img_filename}"
             cv2.imwrite(plate_img_path, crop)
         
-        db: Session = next(get_db())
-        rec = PlateRecord(
-            plate_text=plate_text,
-            province_text=province_text,
-            confidence=conf,
-            image_path=f"{image_path_for_db}#frame={i}",
-            plate_image_path=plate_img_filename,
-            detections_json=json.dumps({"frame_index": i, "rf": rf}, ensure_ascii=False)
-        )
-        db.add(rec)
-        db.commit()
-        db.refresh(rec)
-        saved_ids.append(rec.id)
+        db = SessionLocal()
+        try:
+            rec = PlateRecord(
+                plate_text=plate_text,
+                province_text=province_text,
+                confidence=conf,
+                image_path=f"{image_path_for_db}#frame={i}",
+                plate_image_path=plate_img_filename,
+                detections_json=json.dumps({"frame_index": i, "rf": rf}, ensure_ascii=False)
+            )
+            db.add(rec)
+            db.commit()
+            db.refresh(rec)
+            saved_ids.append(rec.id)
+        finally:
+            db.close()
         
         # --- Broadcast via WebSocket ---
         await manager.broadcast({
@@ -711,10 +728,8 @@ async def serve_index():
 # API endpoints for frontend
 # =============================
 @app.get("/api/records")
-async def get_records(page: int = 1, limit: int = 20):
+async def get_records(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
     """Get paginated records"""
-    db: Session = next(get_db())
-    
     offset = (page - 1) * limit
     records = db.query(PlateRecord).order_by(desc(PlateRecord.created_at)).offset(offset).limit(limit).all()
     total = db.query(func.count(PlateRecord.id)).scalar()
@@ -739,9 +754,8 @@ async def get_records(page: int = 1, limit: int = 20):
     }
 
 @app.get("/api/records/{record_id}")
-async def get_record(record_id: int):
+async def get_record(record_id: int, db: Session = Depends(get_db)):
     """Get single record details"""
-    db: Session = next(get_db())
     record = db.query(PlateRecord).filter(PlateRecord.id == record_id).first()
     
     if not record:
@@ -758,26 +772,32 @@ async def get_record(record_id: int):
     }
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(db: Session = Depends(get_db)):
     """Get statistics for admin dashboard"""
-    db: Session = next(get_db())
-    
-    total_records = db.query(func.count(PlateRecord.id)).scalar()
-    
-    # Today's records
-    today = datetime.utcnow().date()
-    today_records = db.query(func.count(PlateRecord.id)).filter(
-        func.date(PlateRecord.created_at) == today
-    ).scalar()
-    
-    # Average confidence
-    avg_confidence = db.query(func.avg(PlateRecord.confidence)).scalar()
-    
-    return {
-        "total_records": total_records or 0,
-        "today_records": today_records or 0,
-        "avg_confidence": float(avg_confidence) if avg_confidence else 0
-    }
+    try:
+        total_records = db.query(func.count(PlateRecord.id)).scalar()
+        
+        # Today's records
+        today = datetime.utcnow().date()
+        today_records = db.query(func.count(PlateRecord.id)).filter(
+            func.date(PlateRecord.created_at) == today
+        ).scalar()
+        
+        # Average confidence
+        avg_confidence = db.query(func.avg(PlateRecord.confidence)).scalar()
+        
+        return {
+            "total_records": total_records or 0,
+            "today_records": today_records or 0,
+            "avg_confidence": float(avg_confidence) if avg_confidence else 0
+        }
+    except Exception as e:
+        print(f"Error in get_stats: {e}")
+        return {
+            "total_records": 0,
+            "today_records": 0,
+            "avg_confidence": 0
+        }
 
 @app.post("/api/gate/test")
 async def test_gate():
@@ -810,9 +830,8 @@ async def close_gate():
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 @app.get("/api/plates/status")
-async def get_plate_status():
+async def get_plate_status(db: Session = Depends(get_db)):
     """Get plate status counts (new vs duplicate)"""
-    db: Session = next(get_db())
     
     # Count new plates (is_new_plate = True)
     new_plates_count = db.query(func.count(PlateRecord.id)).filter(
@@ -877,12 +896,10 @@ async def save_settings(settings: dict):
     return {"message": "Settings saved successfully", "settings": settings}
 
 @app.get("/api/export/csv")
-async def export_csv():
+async def export_csv(db: Session = Depends(get_db)):
     """Export records as CSV"""
     import io
     import csv
-    
-    db: Session = next(get_db())
     records = db.query(PlateRecord).order_by(desc(PlateRecord.created_at)).limit(1000).all()
     
     output = io.StringIO()
@@ -906,15 +923,16 @@ async def export_csv():
     )
 
 @app.delete("/api/records/clear-old")
-async def clear_old_records(days: int = 30):
+async def clear_old_records(days: int = 30, db: Session = Depends(get_db)):
     """Clear records older than specified days"""
-    db: Session = next(get_db())
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
-    
-    deleted = db.query(PlateRecord).filter(PlateRecord.created_at < cutoff_date).delete()
-    db.commit()
-    
-    return {"deleted_count": deleted}
+    try:
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        deleted = db.query(PlateRecord).filter(PlateRecord.created_at < cutoff_date).delete()
+        db.commit()
+        return {"message": f"Deleted {deleted} records", "deleted_count": deleted}
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 # =============================
 # Modified detect endpoint to broadcast via WebSocket
