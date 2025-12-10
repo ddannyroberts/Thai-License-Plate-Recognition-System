@@ -77,13 +77,25 @@ def send_command(cmd: str) -> str:
 
 def send_open_gate(plate_text: str = ""):
     """Open gate with optional plate text"""
+    if not SERIAL_ENABLED:
+        print("[GATE] ⚠️ Serial disabled, gate command not sent", flush=True)
+        return False
+    
     if plate_text:
         cmd = f"OPEN:{plate_text}"
     else:
         cmd = "OPEN"
     
+    print(f"[GATE] 📤 Sending gate command: {cmd}", flush=True)
     response = send_command(cmd)
-    return "ACK:OPEN" in response
+    
+    success = "ACK:OPEN" in response
+    if success:
+        print(f"[GATE] ✅ Gate opened successfully! Response: {response}", flush=True)
+    else:
+        print(f"[GATE] ❌ Gate command failed. Response: {response}", flush=True)
+    
+    return success
 
 def send_close_gate():
     """Close gate immediately"""

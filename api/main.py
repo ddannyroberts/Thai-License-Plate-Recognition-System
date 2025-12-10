@@ -210,6 +210,11 @@ async def get_current_user(session_token: str):
 FORCE_OPEN_ALWAYS = os.getenv("FORCE_OPEN_ALWAYS", "0") == "1"
 GATE_TRIGGER_MODE = os.getenv("GATE_TRIGGER_MODE", "every_record")  # every_record | per_plate_cooldown
 OPEN_COOLDOWN_SEC = int(os.getenv("OPEN_COOLDOWN_SEC", "10"))
+
+# Debug: Print gate settings on startup
+print(f"[GATE CONFIG] FORCE_OPEN_ALWAYS={FORCE_OPEN_ALWAYS}", flush=True)
+print(f"[GATE CONFIG] GATE_TRIGGER_MODE={GATE_TRIGGER_MODE}", flush=True)
+print(f"[GATE CONFIG] OPEN_COOLDOWN_SEC={OPEN_COOLDOWN_SEC}", flush=True)
 ALLOWED_PREFIXES  = os.getenv("ALLOWED_PREFIXES", "").strip()  # ex: "กร,กต,กว"
 PLATE_STRICT      = os.getenv("PLATE_STRICT", "0") == "1"
 
@@ -230,17 +235,22 @@ def _allowed_by_prefix(plate_norm: str) -> bool:
 def should_open(plate_text: str, conf: float | None) -> Tuple[bool, str]:
     """ตัดสินใจว่าจะเปิดไม้หรือไม่ ตาม ENV ที่ตั้งไว้"""
     if FORCE_OPEN_ALWAYS:
+        print(f"[GATE DECISION] ✅ FORCE_OPEN_ALWAYS enabled", flush=True)
         return True, "force_open"
 
-    if not plate_text:
+    if not plate_text or len(plate_text.strip()) < 2:
+        print(f"[GATE DECISION] ❌ Empty or invalid plate text: '{plate_text}'", flush=True)
         return False, "empty_plate"
 
     plate_norm = _normalize_plate(plate_text)
+    print(f"[GATE DECISION] Normalized plate: '{plate_norm}' from '{plate_text}'", flush=True)
 
     if PLATE_STRICT and not _allowed_by_prefix(plate_norm):
+        print(f"[GATE DECISION] ❌ Prefix blocked: {plate_norm} not in {ALLOWED_PREFIXES}", flush=True)
         return False, f"prefix_blocked plate={plate_norm} allowed={ALLOWED_PREFIXES}"
 
     if GATE_TRIGGER_MODE == "every_record":
+        print(f"[GATE DECISION] ✅ Mode: every_record - Opening gate", flush=True)
         return True, "every_record"
 
     if GATE_TRIGGER_MODE == "per_plate_cooldown":
@@ -248,10 +258,13 @@ def should_open(plate_text: str, conf: float | None) -> Tuple[bool, str]:
         last = _recent_open_by_plate.get(plate_norm)
         if last and (now - last) < timedelta(seconds=OPEN_COOLDOWN_SEC):
             left = OPEN_COOLDOWN_SEC - int((now - last).total_seconds())
+            print(f"[GATE DECISION] ⏳ Cooldown active: {left}s remaining for plate {plate_norm}", flush=True)
             return False, f"cooldown({left}s) plate={plate_norm}"
         _recent_open_by_plate[plate_norm] = now
+        print(f"[GATE DECISION] ✅ Cooldown OK - Opening gate for plate {plate_norm}", flush=True)
         return True, f"cooldown_ok plate={plate_norm}"
 
+    print(f"[GATE DECISION] ❌ Unknown mode: {GATE_TRIGGER_MODE}", flush=True)
     return False, f"unknown_mode({GATE_TRIGGER_MODE})"
 
 # =============================
@@ -262,8 +275,102 @@ async def detect(
     file: UploadFile | None = File(default=None),
     image_url: str | None = Form(default=None)
 ):
+    """
+    Detect license plate from image or video file.
+    Supports both image and video files - automatically detects file type.
+    For videos, processes first frame with plate detected and opens gate.
+    """
     if not file and not image_url:
         return JSONResponse(status_code=400, content={"detail": "Provide file or image_url"})
+    
+    # Check if uploaded file is a video
+    is_video = False
+    if file:
+        content_type = file.content_type or ""
+        file_extension = (file.filename or "").lower()
+        is_video = content_type.startswith("video/") or any(file_extension.endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv", ".webm"])
+        
+        # If video file, process first frame with plate detected
+        if is_video:
+            data = await file.read()
+            tmp_video_path = f"/tmp/{uuid4().hex}.mp4"
+            with open(tmp_video_path, "wb") as f:
+                f.write(data)
+            
+            try:
+                cap = cv2.VideoCapture(tmp_video_path)
+                if not cap.isOpened():
+                    return JSONResponse(status_code=400, content={"detail": "Cannot open video file"})
+                
+                # Read first few frames to find one with a plate
+                frame_count = 0
+                max_frames_to_check = 30  # Check first 30 frames
+                best_frame = None
+                best_detection = None
+                best_plate_text = ""
+                best_conf = 0.0
+                
+                while frame_count < max_frames_to_check:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    
+                    # Try to detect plate in this frame
+                    det_preds = infer_detector(frame)
+                    if det_preds:
+                        # Found a plate, process it
+                        best_det = max(det_preds, key=lambda x: float(x.get("confidence", 0)))
+                        x1, y1, x2, y2 = int(best_det["x1"]), int(best_det["y1"]), int(best_det["x2"]), int(best_det["y2"])
+                        H, W = frame.shape[:2]
+                        x1, y1 = max(0, min(x1, x2)), max(0, min(y1, y2))
+                        x2, y2 = max(0, max(x1, x2)), max(0, max(y1, y2))
+                        x1, y1, x2, y2 = min(x1, W-1), min(y1, H-1), min(x2, W), min(y2, H)
+                        pad = int(0.05 * max(x2 - x1, y2 - y1))
+                        x1p, y1p = max(0, x1 - pad), max(0, y1 - pad)
+                        x2p, y2p = min(W, x2 + pad), min(H, y2 + pad)
+                        crop = frame[y1p:y2p, x1p:x2p]
+                        
+                        rf = infer_reader(crop)
+                        from .character_segmentation import read_plate_by_characters
+                        plate_text, character_details = read_plate_by_characters(crop)
+                        
+                        if plate_text and len(plate_text) >= 2:
+                            conf = float(best_det.get("confidence", 0))
+                            if conf > best_conf:
+                                best_frame = crop
+                                best_detection = det_preds
+                                best_plate_text = plate_text
+                                best_conf = conf
+                                break  # Found a good plate, use it
+                    
+                    frame_count += 1
+                    # Skip frames
+                    for _ in range(5):
+                        cap.read()
+                
+                cap.release()
+                
+                if best_frame is None or not best_plate_text:
+                    try: os.remove(tmp_video_path)
+                    except: pass
+                    return JSONResponse(status_code=400, content={"detail": "No license plate detected in video"})
+                
+                # Process the best frame found (similar to image detection)
+                # Use the crop as the image for OCR
+                img_for_ocr = best_frame
+                used_crop = True
+                image_source = tmp_video_path
+                plate_text = best_plate_text
+                det_preds = best_detection
+                rf = infer_reader(img_for_ocr)
+                
+                # Continue with normal detection flow...
+                # (จะใช้โค้ดเดิมต่อไป)
+                
+            except Exception as e:
+                try: os.remove(tmp_video_path)
+                except: pass
+                return JSONResponse(status_code=500, content={"detail": f"Video processing error: {str(e)}"})
 
     # --- Prepare image source ---
     used_crop = False
@@ -428,20 +535,29 @@ async def detect(
         is_new_plate = True
         seen_count = 1
         first_seen_at = datetime.utcnow()
+        duplicate_records = []
         
         if normalized_plate:
-            # Check if this plate (normalized) was seen before
-            existing_plate = db.query(PlateRecord).filter(
+            # Find all existing records with same normalized plate
+            existing_records = db.query(PlateRecord).filter(
                 func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
-            ).order_by(PlateRecord.created_at.asc()).first()
+            ).order_by(PlateRecord.created_at.asc()).all()
             
-            if existing_plate:
+            if existing_records:
                 is_new_plate = False
-                first_seen_at = existing_plate.first_seen_at or existing_plate.created_at
-                # Count all records with same normalized plate
-                seen_count = db.query(func.count(PlateRecord.id)).filter(
-                    func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
-                ).scalar() + 1
+                first_seen_at = existing_records[0].first_seen_at or existing_records[0].created_at
+                seen_count = len(existing_records) + 1
+                
+                # Collect duplicate record information
+                for dup_rec in existing_records:
+                    duplicate_records.append({
+                        "id": dup_rec.id,
+                        "plate_text": dup_rec.plate_text,
+                        "plate_image": f"/uploads/plates/{dup_rec.plate_image_path}" if dup_rec.plate_image_path else None,
+                        "confidence": dup_rec.confidence,
+                        "created_at": dup_rec.created_at.isoformat() if dup_rec.created_at else None,
+                        "first_seen_at": (dup_rec.first_seen_at or dup_rec.created_at).isoformat() if (dup_rec.first_seen_at or dup_rec.created_at) else None
+                    })
         
         # --- Save DB ---
         rec = PlateRecord(
@@ -481,10 +597,22 @@ async def detect(
     if ok:
         try:
             print("[SERIAL] → OPEN", flush=True)
-            send_open_gate(plate_text or "")
+            success = send_open_gate(plate_text or "")
+            if success:
+                print(f"[GATE] ✅ Gate opened successfully for plate: {plate_text}", flush=True)
+                await manager.broadcast({
+                    "type": "gate",
+                    "action": "opened",
+                    "plate_text": plate_text or "",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            else:
+                print(f"[GATE] ⚠️ Gate command sent but no ACK received", flush=True)
         except Exception as e:
             # อย่าให้ API พังถ้า serial ล้มเหลว
-            print("WARN serial:", e, flush=True)
+            print(f"[GATE] ❌ WARN serial error: {e}", flush=True)
+            import traceback
+            print(f"[GATE] Traceback: {traceback.format_exc()}", flush=True)
 
     response_data = {
         "id": rec.id,
@@ -492,7 +620,9 @@ async def detect(
         "province_text": province_text or "",
         "confidence": conf,
         "is_new_plate": is_new_plate,
-        "seen_count": seen_count
+        "seen_count": seen_count,
+        "duplicate_records": duplicate_records if duplicate_records else None,
+        "plate_image": f"/uploads/plates/{plate_img_filename}" if plate_img_filename else None
     }
     
     return PlateCreateResponse(**response_data)

@@ -499,7 +499,7 @@ async function processWebRTCFrame() {
     // Convert to blob
     canvas.toBlob(async (blob) => {
         if (blob) {
-            // Send to API
+            // Send to API - ใช้ model จับและอ่านป้ายทะเบียน
             const formData = new FormData();
             formData.append('file', blob, 'camera_capture.jpg');
             
@@ -509,14 +509,35 @@ async function processWebRTCFrame() {
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    console.error('Detection API error:', errorData);
+                    return;
+                }
+                
                 const result = await response.json();
                 
-                if (result.plate_text) {
+                // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
+                if (result.plate_text && result.plate_text.length >= 2) {
                     // Show detection in UI
                     showCameraDetection(result);
                     
                     // Highlight on video (optional)
                     highlightDetection(video, ctx);
+                    
+                    // Refresh records if on records tab
+                    const recordsTab = document.getElementById('records');
+                    if (recordsTab && recordsTab.classList.contains('active')) {
+                        loadRecords();
+                    }
+                    
+                    // Refresh plate status if admin
+                    if (currentUser && currentUser.role === 'admin') {
+                        loadPlateStatus();
+                    }
+                } else {
+                    // No plate detected, but still log for debugging
+                    console.log('No plate detected in frame');
                 }
                 
             } catch (error) {
@@ -529,6 +550,7 @@ async function processWebRTCFrame() {
 async function processDroidcamFrame() {
     // For DroidCam, we send the URL to backend instead of capturing frame
     // Backend will fetch the frame from the IP camera using cv2.VideoCapture
+    // แล้วใช้ model จับและอ่านป้ายทะเบียน
     
     // Use the base URL (no timestamp needed for MJPEG stream)
     try {
@@ -548,7 +570,8 @@ async function processDroidcamFrame() {
         
         const result = await response.json();
         
-        if (result.plate_text) {
+        // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
+        if (result.plate_text && result.plate_text.length >= 2) {
             // Show detection in UI
             showCameraDetection(result);
             
@@ -557,6 +580,20 @@ async function processDroidcamFrame() {
             if (droidcamPreview) {
                 highlightDetection(droidcamPreview, null);
             }
+            
+            // Refresh records if on records tab
+            const recordsTab = document.getElementById('records');
+            if (recordsTab && recordsTab.classList.contains('active')) {
+                loadRecords();
+            }
+            
+            // Refresh plate status if admin
+            if (currentUser && currentUser.role === 'admin') {
+                loadPlateStatus();
+            }
+        } else {
+            // No plate detected, but still log for debugging
+            console.log('No plate detected in DroidCam frame');
         }
         
     } catch (error) {
@@ -571,22 +608,47 @@ function showCameraDetection(result) {
     
     const detectionCard = document.createElement('div');
     detectionCard.className = 'camera-detection-card';
+    
+    // Show plate status (new or duplicate)
+    const statusBadge = result.is_new_plate 
+        ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">🆕 NEW</span>'
+        : `<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">🔄 DUPLICATE (${result.seen_count || 1}x)</span>`;
+    
     detectionCard.innerHTML = `
-        <div class="detection-time">${new Date().toLocaleTimeString()}</div>
-        <div class="detection-plate">${result.plate_text || 'N/A'}</div>
-        <div class="detection-confidence">${(result.confidence * 100).toFixed(1)}%</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <div class="detection-time" style="font-size: 11px; color: #6b7280;">${new Date().toLocaleTimeString('th-TH')}</div>
+            ${statusBadge}
+        </div>
+        <div class="detection-plate" style="font-weight: bold; font-size: 18px; color: #1e3a8a; margin: 5px 0;">${result.plate_text || 'N/A'}</div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="detection-confidence" style="color: #64748b; font-size: 12px;">Confidence: ${result.confidence ? (result.confidence * 100).toFixed(1) + '%' : 'N/A'}</div>
+            ${result.plate_image ? `<img src="${result.plate_image}" style="width: 60px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; cursor: pointer;" onclick="showImageModal('${result.plate_image}')" alt="Plate">` : ''}
+        </div>
+        ${result.duplicate_records && result.duplicate_records.length > 0 ? `
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280;">
+                🔄 ซ้ำกับ ${result.duplicate_records.length} รายการ
+            </div>
+        ` : ''}
     `;
     
     // Add to top
     detectionDiv.insertBefore(detectionCard, detectionDiv.firstChild);
     
-    // Keep only last 10 detections
-    while (detectionDiv.children.length > 10) {
+    // Keep only last 20 detections
+    while (detectionDiv.children.length > 20) {
         detectionDiv.removeChild(detectionDiv.lastChild);
     }
     
     // Flash effect
     detectionCard.style.animation = 'flash 0.5s ease-out';
+    
+    // Show notification
+    if (result.plate_text) {
+        const message = result.is_new_plate 
+            ? `🆕 ป้ายใหม่: ${result.plate_text}` 
+            : `🔄 ป้ายซ้ำ: ${result.plate_text} (เจอแล้ว ${result.seen_count || 1} ครั้ง)`;
+        showNotification(message, result.is_new_plate ? 'success' : 'info');
+    }
 }
 
 function highlightDetection(element, ctx) {
@@ -907,8 +969,64 @@ function showImageResult(result) {
         gateStatusEl.textContent = result.gate_opened ? '✅ Opened' : '❌ Not Opened';
     }
     
-    const message = result.is_new_plate ? '🆕 Detection completed! New plate detected!' : '🔄 Detection completed! Duplicate plate.';
+    // Show duplicate records if any
+    if (result.duplicate_records && result.duplicate_records.length > 0) {
+        showDuplicateRecords(result.duplicate_records, resultDiv);
+    }
+    
+    const message = result.is_new_plate 
+        ? '🆕 Detection completed! New plate detected!' 
+        : `🔄 Detection completed! Duplicate plate. Found ${result.duplicate_records?.length || 0} duplicate record(s).`;
     showNotification(message, result.is_new_plate ? 'success' : 'info');
+}
+
+function showDuplicateRecords(duplicateRecords, container) {
+    // Remove existing duplicate section if any
+    const existingSection = container.querySelector('.duplicate-records-section');
+    if (existingSection) {
+        existingSection.remove();
+    }
+    
+    const duplicateSection = document.createElement('div');
+    duplicateSection.className = 'duplicate-records-section';
+    duplicateSection.style.cssText = `
+        margin-top: 20px;
+        padding: 15px;
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+    `;
+    
+    duplicateSection.innerHTML = `
+        <h4 style="color: #92400e; margin-bottom: 10px; font-size: 16px;">
+            🔄 ป้ายซ้ำ (พบ ${duplicateRecords.length} รายการ)
+        </h4>
+        <div style="max-height: 300px; overflow-y: auto;">
+            ${duplicateRecords.map((dup, index) => `
+                <div style="display: flex; align-items: center; gap: 15px; padding: 10px; margin-bottom: 10px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold; color: #1e3a8a; margin-bottom: 5px;">
+                            รายการที่ ${index + 1} - ID: ${dup.id}
+                        </div>
+                        <div style="color: #64748b; font-size: 14px;">
+                            <div>ป้ายทะเบียน: <strong>${dup.plate_text || 'N/A'}</strong></div>
+                            <div>Confidence: ${dup.confidence ? (dup.confidence * 100).toFixed(1) + '%' : 'N/A'}</div>
+                            <div>วันที่บันทึก: ${dup.created_at ? new Date(dup.created_at).toLocaleString('th-TH') : 'N/A'}</div>
+                            ${dup.first_seen_at ? `<div>เจอครั้งแรก: ${new Date(dup.first_seen_at).toLocaleString('th-TH')}</div>` : ''}
+                        </div>
+                    </div>
+                    ${dup.plate_image ? `
+                        <img src="${dup.plate_image}" 
+                             style="width: 100px; height: 60px; object-fit: cover; border-radius: 6px; border: 2px solid #e5e7eb; cursor: pointer;" 
+                             onclick="showImageModal('${dup.plate_image}')"
+                             alt="Plate ${dup.id}">
+                    ` : '<div style="width: 100px; height: 60px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 12px;">No Image</div>'}
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    container.appendChild(duplicateSection);
 }
 
 function showVideoResult(result) {

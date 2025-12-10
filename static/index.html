@@ -325,55 +325,111 @@
             
             <div class="admin-grid">
                 <!-- Statistics -->
-                <div class="admin-card">
-                    <h3>📈 Statistics</h3>
-                    <div class="stat-item">
-                        <span>Total Records:</span>
-                        <strong id="totalRecords">0</strong>
+                <div class="admin-card stat-card">
+                    <div class="card-header">
+                        <div class="card-icon stat-icon">📈</div>
+                        <h3>Statistics</h3>
                     </div>
-                    <div class="stat-item">
-                        <span>Today's Detections:</span>
-                        <strong id="todayRecords">0</strong>
-                    </div>
-                    <div class="stat-item">
-                        <span>Average Confidence:</span>
-                        <strong id="avgConfidence">0%</strong>
+                    <div class="stat-content">
+                        <div class="stat-item-enhanced">
+                            <div class="stat-label">
+                                <span class="stat-icon-small">📊</span>
+                                <span>Total Records</span>
+                            </div>
+                            <div class="stat-value" id="totalRecords">0</div>
+                        </div>
+                        <div class="stat-item-enhanced">
+                            <div class="stat-label">
+                                <span class="stat-icon-small">📅</span>
+                                <span>Today's Detections</span>
+                            </div>
+                            <div class="stat-value" id="todayRecords">0</div>
+                        </div>
+                        <div class="stat-item-enhanced">
+                            <div class="stat-label">
+                                <span class="stat-icon-small">🎯</span>
+                                <span>Average Confidence</span>
+                            </div>
+                            <div class="stat-value confidence-value" id="avgConfidence">0%</div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Gate Control -->
-                <div class="admin-card">
-                    <h3>🚪 Gate Control</h3>
-                    <div class="gate-status">
-                        <p>Status: <span id="gateConnectionStatus" class="status-badge disconnected">Disconnected</span></p>
+                <div class="admin-card gate-card">
+                    <div class="card-header">
+                        <div class="card-icon gate-icon">🚪</div>
+                        <h3>Gate Control</h3>
                     </div>
-                    <button id="testGateBtn" class="btn btn-primary">Test Gate Open</button>
-                    <button id="forceCloseBtn" class="btn btn-secondary">Force Close</button>
+                    <div class="gate-content">
+                        <div class="gate-status-enhanced">
+                            <div class="status-label">Connection Status</div>
+                            <div class="status-badge-enhanced">
+                                <span class="status-dot" id="gateStatusDot"></span>
+                                <span id="gateConnectionStatus" class="status-text">Disconnected</span>
+                            </div>
+                        </div>
+                        <div class="gate-buttons">
+                            <button id="testGateBtn" class="btn btn-primary btn-enhanced">
+                                <span class="btn-icon">🚀</span>
+                                <span>Test Gate Open</span>
+                            </button>
+                            <button id="forceCloseBtn" class="btn btn-secondary btn-enhanced">
+                                <span class="btn-icon">🔒</span>
+                                <span>Force Close</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Settings -->
-                <div class="admin-card">
-                    <h3>⚙️ Settings</h3>
-                    <div class="form-group">
-                        <label>Gate Mode:</label>
-                        <select id="gateMode">
-                            <option value="every_record">Open on Every Detection</option>
-                            <option value="per_plate_cooldown">Cooldown per Plate</option>
-                            <option value="whitelist">Whitelist Only</option>
-                        </select>
+                <div class="admin-card settings-card">
+                    <div class="card-header">
+                        <div class="card-icon settings-icon">⚙️</div>
+                        <h3>Settings</h3>
                     </div>
-                    <div class="form-group">
-                        <label>Cooldown (seconds):</label>
-                        <input type="number" id="cooldown" value="10" min="0">
+                    <div class="settings-content">
+                        <div class="form-group-enhanced">
+                            <label class="form-label">
+                                <span class="label-icon">🔧</span>
+                                Gate Mode
+                            </label>
+                            <select id="gateMode" class="form-select-enhanced">
+                                <option value="every_record">Open on Every Detection</option>
+                                <option value="per_plate_cooldown">Cooldown per Plate</option>
+                                <option value="whitelist">Whitelist Only</option>
+                            </select>
+                        </div>
+                        <div class="form-group-enhanced">
+                            <label class="form-label">
+                                <span class="label-icon">⏱️</span>
+                                Cooldown (seconds)
+                            </label>
+                            <input type="number" id="cooldown" value="10" min="0" class="form-input-enhanced">
+                        </div>
+                        <button id="saveSettingsBtn" class="btn btn-primary btn-enhanced btn-full">
+                            <span class="btn-icon">💾</span>
+                            <span>Save Settings</span>
+                        </button>
                     </div>
-                    <button id="saveSettingsBtn" class="btn btn-primary">💾 Save Settings</button>
                 </div>
 
                 <!-- Data Management -->
-                <div class="admin-card">
-                    <h3>🗑️ Data Management</h3>
-                    <button id="exportDataBtn" class="btn btn-secondary">📥 Export CSV</button>
-                    <button id="clearOldDataBtn" class="btn btn-danger">🗑️ Clear Old Data</button>
+                <div class="admin-card data-card">
+                    <div class="card-header">
+                        <div class="card-icon data-icon">🗑️</div>
+                        <h3>Data Management</h3>
+                    </div>
+                    <div class="data-content">
+                        <button id="exportDataBtn" class="btn btn-secondary btn-enhanced btn-full">
+                            <span class="btn-icon">📥</span>
+                            <span>Export CSV</span>
+                        </button>
+                        <button id="clearOldDataBtn" class="btn btn-danger btn-enhanced btn-full">
+                            <span class="btn-icon">🗑️</span>
+                            <span>Clear Old Data</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
