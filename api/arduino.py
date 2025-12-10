@@ -19,44 +19,60 @@ def _connect():
 
     try:
         port_or_url = SERIAL_URL if SERIAL_URL else SERIAL_PORT
+        print(f"[ARDUINO] Attempting to connect to {port_or_url} at {SERIAL_BAUD} baud...", flush=True)
         _ser = serial.serial_for_url(port_or_url, baudrate=SERIAL_BAUD, timeout=1)
         time.sleep(1.5)  # Wait for Arduino reset
-        print(f"[ARDUINO] Connected to {port_or_url}", flush=True)
+        print(f"[ARDUINO] ✅ Connected to {port_or_url}", flush=True)
         return _ser
     except Exception as e:
-        print(f"[ARDUINO] Connection failed: {e}", flush=True)
+        print(f"[ARDUINO] ❌ Connection failed: {e}", flush=True)
+        print(f"[ARDUINO] Check: 1) Port exists: {port_or_url}, 2) SERIAL_ENABLED=true, 3) Arduino is connected", flush=True)
         return None
 
 def send_command(cmd: str) -> str:
     """Send command to Arduino and get response"""
     if not SERIAL_ENABLED:
-        print("[ARDUINO] Serial disabled", flush=True)
+        print("[ARDUINO] ⚠️ Serial disabled (SERIAL_ENABLED=false)", flush=True)
         return ""
     
     try:
         ser = _connect()
         if not ser:
+            print(f"[ARDUINO] ⚠️ Cannot connect to {SERIAL_PORT}", flush=True)
             return ""
         
+        # Clear any pending input
+        ser.reset_input_buffer()
+        
         # Send command
-        ser.write(f"{cmd}\n".encode())
+        cmd_bytes = f"{cmd}\n".encode()
+        print(f"[ARDUINO] 📤 Sending: {cmd_bytes.decode().strip()}", flush=True)
+        ser.write(cmd_bytes)
         ser.flush()
         
         # Read response (with timeout)
         response = ""
         start_time = time.time()
-        while time.time() - start_time < 2:
+        while time.time() - start_time < 3:  # Increased timeout to 3 seconds
             if ser.in_waiting:
                 line = ser.readline().decode().strip()
                 if line:
-                    response = line
-                    break
+                    # Skip echo lines (CMD: ...)
+                    if not line.startswith("CMD:"):
+                        response = line
+                        print(f"[ARDUINO] 📥 Response: {response}", flush=True)
+                        break
+            time.sleep(0.1)  # Small delay to avoid busy waiting
         
-        print(f"[ARDUINO] CMD: {cmd} -> {response}", flush=True)
+        if not response:
+            print(f"[ARDUINO] ⚠️ No response from Arduino for command: {cmd}", flush=True)
+        
         return response
         
     except Exception as e:
-        print(f"[ARDUINO] Command failed: {e}", flush=True)
+        print(f"[ARDUINO] ❌ Command failed: {e}", flush=True)
+        import traceback
+        print(f"[ARDUINO] Traceback: {traceback.format_exc()}", flush=True)
         return ""
 
 def send_open_gate(plate_text: str = ""):

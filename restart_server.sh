@@ -1,21 +1,27 @@
 #!/bin/bash
 
-# Thai LPR API - Start Script
-# This script sets up environment variables and starts the FastAPI server
+# Thai LPR API - Restart Script
+# This script stops the current server and starts a new one with proper environment variables
 
-echo "🚗 Starting Thai License Plate Recognition API..."
+echo "🔄 Restarting Thai License Plate Recognition API..."
 echo "=================================================="
 
-# Set environment variables (using SQLite for local development)
-export DATABASE_URL="sqlite:///./data.db"
-export SERIAL_ENABLED="true"
-export SERIAL_PORT="/dev/cu.usbmodem1201"  # macOS: /dev/cu.usbmodem*, Linux: /dev/ttyACM0
-export SERIAL_BAUD="115200"                  # Must match Arduino Serial.begin(115200)
-export GATE_MODE="per_plate_cooldown"
-export GATE_COOLDOWN_SEC="10"
-export VIDEO_MIN_LETTERS="2"
-export VIDEO_SKIP_FRAMES="30"
-export MIN_CONFIDENCE="0.3"
+# Find and kill existing uvicorn processes
+echo "🛑 Stopping existing server..."
+pkill -f "uvicorn api.main:app" || echo "   No existing server found"
+
+# Wait a moment for process to stop
+sleep 2
+
+# Load environment variables from .env
+if [ -f .env ]; then
+    echo "✅ Loading .env file..."
+    export $(cat .env | grep -v '^#' | xargs)
+else
+    echo "⚠️  .env file not found, using defaults from start.sh"
+    source start.sh
+    exit 0
+fi
 
 # Navigate to project directory
 cd "$(dirname "$0")"
@@ -33,7 +39,11 @@ fi
 
 echo "✅ Models found"
 echo "✅ Using SQLite database: data.db"
+echo "✅ Serial enabled: ${SERIAL_ENABLED}"
+echo "✅ Serial port: ${SERIAL_PORT}"
+echo "✅ Serial baud: ${SERIAL_BAUD}"
 echo ""
+
 # Get port from environment or use default 8001
 PORT=${APP_PORT:-8001}
 
@@ -43,14 +53,4 @@ echo ""
 
 # Start the server
 uvicorn api.main:app --host 0.0.0.0 --port ${PORT} --reload
-
-
-
-
-
-
-
-
-
-
 

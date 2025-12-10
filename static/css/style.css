@@ -966,24 +966,55 @@ table tbody tr:last-child td {
 }
 
 .plate-image-cell {
-    padding: 8px !important;
+    text-align: center;
+    padding: 8px;
+    width: 120px;
 }
 
 .plate-thumbnail {
-    max-width: 150px;
-    max-height: 60px;
+    width: 100px;
+    height: 60px;
+    object-fit: cover;
     border-radius: 6px;
+    border: 2px solid #e5e7eb;
     cursor: pointer;
     transition: all 0.3s ease;
-    border: 2px solid var(--border-color);
-    object-fit: contain;
-    background: var(--light-bg);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .plate-thumbnail:hover {
     transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    border-color: var(--primary-color);
+    border-color: #1e3a8a;
+    box-shadow: 0 4px 8px rgba(30, 58, 138, 0.3);
+}
+
+/* Original plate-image-cell styles */
+.plate-image-cell {
+    padding: 8px !important;
+    text-align: center;
+    width: 120px;
+}
+
+.plate-thumbnail {
+    width: 100px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: #f9fafb;
+    display: block;
+    margin: 0 auto;
+}
+
+.plate-thumbnail:hover {
+    transform: scale(1.15);
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+    border-color: #1e3a8a;
+    z-index: 10;
+    position: relative;
 }
 
 .text-center {
@@ -1133,6 +1164,26 @@ table tbody tr:last-child td {
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
 }
 
 /* Real-time Panel */

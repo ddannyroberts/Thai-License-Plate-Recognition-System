@@ -803,14 +803,40 @@ async def get_stats(db: Session = Depends(get_db)):
 async def test_gate():
     """Test gate open command"""
     try:
-        send_open_gate("TEST")
-        await manager.broadcast({
-            "type": "gate",
-            "action": "opened",
-            "plate_text": "TEST"
-        })
-        return {"message": "Test command sent successfully"}
+        from .arduino import SERIAL_ENABLED, SERIAL_PORT, ping_arduino
+        
+        # Check if serial is enabled
+        if not SERIAL_ENABLED:
+            return JSONResponse(
+                status_code=400, 
+                content={"detail": "Serial communication is disabled. Set SERIAL_ENABLED=true"}
+            )
+        
+        # Test connection first
+        print(f"[GATE TEST] Testing connection to {SERIAL_PORT}...", flush=True)
+        if not ping_arduino():
+            return JSONResponse(
+                status_code=500,
+                content={"detail": f"Arduino not responding. Check connection to {SERIAL_PORT}"}
+            )
+        
+        # Send open command
+        success = send_open_gate("TEST")
+        if success:
+            await manager.broadcast({
+                "type": "gate",
+                "action": "opened",
+                "plate_text": "TEST"
+            })
+            return {"message": "Test command sent successfully", "arduino_ack": True}
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Gate command sent but no ACK received from Arduino"}
+            )
     except Exception as e:
+        import traceback
+        print(f"[GATE TEST] Error: {e}\n{traceback.format_exc()}", flush=True)
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 @app.post("/api/gate/close")

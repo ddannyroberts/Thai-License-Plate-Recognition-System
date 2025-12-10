@@ -574,7 +574,6 @@ function showCameraDetection(result) {
     detectionCard.innerHTML = `
         <div class="detection-time">${new Date().toLocaleTimeString()}</div>
         <div class="detection-plate">${result.plate_text || 'N/A'}</div>
-        <div class="detection-province">${result.province_text || ''}</div>
         <div class="detection-confidence">${(result.confidence * 100).toFixed(1)}%</div>
     `;
     
@@ -801,7 +800,6 @@ function showVideoDetection(result, container, timestamp) {
     detectionDiv.innerHTML = `
         ${statusBadge}
         <div style="font-weight: bold; margin-top: 5px; font-size: 16px;">${result.plate_text || 'N/A'}</div>
-        <div style="color: #6b7280; font-size: 14px;">${result.province_text || ''}</div>
         <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
             Time: ${timeFormatted} | Confidence: ${((result.confidence || 0) * 100).toFixed(1)}%
         </div>
@@ -893,7 +891,6 @@ function showImageResult(result) {
     resultDiv.style.display = 'block';
     
     document.getElementById('plateText').textContent = result.plate_text || 'N/A';
-    document.getElementById('provinceText').textContent = result.province_text || 'N/A';
     document.getElementById('confidence').textContent = result.confidence 
         ? (result.confidence * 100).toFixed(2) 
         : 'N/A';
@@ -944,7 +941,6 @@ function showVideoResult(result) {
     } else {
         // Single frame result (fallback)
         document.getElementById('plateText').textContent = result.plate_text || 'N/A';
-        document.getElementById('provinceText').textContent = result.province_text || 'N/A';
         document.getElementById('confidence').textContent = result.confidence 
             ? (result.confidence * 100).toFixed(2) + ' %' 
             : 'N/A';
@@ -994,11 +990,11 @@ function displayRecords(records) {
             <td>${record.id}</td>
             <td class="plate-image-cell">
                 ${record.plate_image 
-                    ? `<img src="${record.plate_image}" class="plate-thumbnail" alt="Plate" onclick="showImageModal('${record.plate_image}')">`
-                    : 'N/A'}
+                    ? `<img src="${record.plate_image}" class="plate-thumbnail" alt="Plate ${record.plate_text || record.id}" onclick="showImageModal('${record.plate_image}')" onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML='<span style=\\'color: #9ca3af; font-size: 12px;\\'>No Image</span>';" loading="lazy">
+                    `
+                    : '<span style="color: #9ca3af; font-size: 12px;">No Image</span>'}
             </td>
             <td><strong>${record.plate_text || 'N/A'}</strong></td>
-            <td>${record.province_text || 'N/A'}</td>
             <td>${record.confidence ? (record.confidence * 100).toFixed(1) + '%' : 'N/A'}</td>
             <td>${record.created_at ? new Date(record.created_at).toLocaleString('th-TH') : 'N/A'}</td>
         </tr>
@@ -1042,7 +1038,6 @@ async function loadPlateStatus() {
                         <div style="display: flex; justify-content: space-between; align-items: start;">
                             <div style="flex: 1;">
                                 <div style="font-weight: bold; font-size: 18px; color: #0369a1;">${plate.plate_text || 'N/A'}</div>
-                                <div style="color: #6b7280; margin-top: 5px;">${plate.province_text || ''}</div>
                                 <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
                                     Confidence: ${((plate.confidence || 0) * 100).toFixed(1)}% | 
                                     ${plate.created_at ? new Date(plate.created_at).toLocaleString('th-TH') : ''}
@@ -1073,7 +1068,6 @@ async function loadPlateStatus() {
                                     </span>
                                 </div>
                                 <div style="font-weight: bold; font-size: 18px; color: #92400e; margin-top: 5px;">${plate.plate_text || 'N/A'}</div>
-                                <div style="color: #6b7280; margin-top: 5px;">${plate.province_text || ''}</div>
                                 <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
                                     Confidence: ${((plate.confidence || 0) * 100).toFixed(1)}% | 
                                     ${plate.created_at ? new Date(plate.created_at).toLocaleString('th-TH') : ''}
@@ -1100,11 +1094,18 @@ async function testGate() {
         const response = await fetch('/api/gate/test', { method: 'POST' });
         const result = await response.json();
         
-        showNotification(result.message || 'Gate test command sent', 'success');
+        if (response.ok) {
+            showNotification(result.message || 'Gate test command sent', 'success');
+        } else {
+            // Show error message from server
+            const errorMsg = result.detail || result.message || 'Gate test failed';
+            showNotification(`❌ ${errorMsg}`, 'error');
+            console.error('Gate test error:', result);
+        }
         
     } catch (error) {
         console.error('Gate test failed:', error);
-        showNotification('Failed to send gate command', 'error');
+        showNotification(`❌ Failed to send gate command: ${error.message}`, 'error');
     }
 }
 
@@ -1212,7 +1213,7 @@ function connectWebSocket() {
 function handleWebSocketMessage(data) {
     if (data.type === 'detection') {
         // Show real-time detection
-        addRealtimeLog(`🚗 ${data.plate_text || 'Unknown'} | ${data.province_text || ''} | ${(data.confidence * 100).toFixed(1)}%`);
+        addRealtimeLog(`🚗 ${data.plate_text || 'Unknown'} | ${(data.confidence * 100).toFixed(1)}%`);
         
         // Refresh records if on records tab
         const recordsTab = document.getElementById('records');
@@ -1430,33 +1431,108 @@ function showSuccess(elementId, message) {
 }
 
 function showImageModal(imageSrc) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('imageModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
     // Create modal to show full image
     const modal = document.createElement('div');
+    modal.id = 'imageModal';
     modal.style.cssText = `
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.9);
+        background: rgba(0, 0, 0, 0.95);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 10000;
         cursor: pointer;
+        animation: fadeIn 0.3s ease;
+    `;
+    
+    const imgContainer = document.createElement('div');
+    imgContainer.style.cssText = `
+        position: relative;
+        max-width: 90%;
+        max-height: 90%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     `;
     
     const img = document.createElement('img');
     img.src = imageSrc;
     img.style.cssText = `
-        max-width: 90%;
-        max-height: 90%;
+        max-width: 100%;
+        max-height: 90vh;
         border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        object-fit: contain;
     `;
+    img.onerror = () => {
+        imgContainer.innerHTML = `
+            <div style="color: white; text-align: center; padding: 40px;">
+                <p style="font-size: 18px; margin-bottom: 10px;">⚠️ ไม่สามารถโหลดภาพได้</p>
+                <p style="font-size: 14px; color: #9ca3af;">Image not found</p>
+            </div>
+        `;
+    };
     
-    modal.appendChild(img);
-    modal.addEventListener('click', () => modal.remove());
+    const closeBtn = document.createElement('div');
+    closeBtn.innerHTML = '✕';
+    closeBtn.style.cssText = `
+        position: absolute;
+        top: -40px;
+        right: 0;
+        color: white;
+        font-size: 32px;
+        font-weight: bold;
+        cursor: pointer;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        transition: all 0.3s ease;
+    `;
+    closeBtn.onmouseover = () => {
+        closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+        closeBtn.style.transform = 'scale(1.1)';
+    };
+    closeBtn.onmouseout = () => {
+        closeBtn.style.background = 'rgba(255, 255, 255, 0.1)';
+        closeBtn.style.transform = 'scale(1)';
+    };
+    
+    imgContainer.appendChild(img);
+    imgContainer.appendChild(closeBtn);
+    modal.appendChild(imgContainer);
+    
+    // Close on click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target === closeBtn) {
+            modal.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => modal.remove(), 300);
+        }
+    });
+    
+    // Close on ESC key
+    const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+            modal.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => modal.remove(), 300);
+            document.removeEventListener('keydown', handleEsc);
+        }
+    };
+    document.addEventListener('keydown', handleEsc);
+    
     document.body.appendChild(modal);
 }
 
