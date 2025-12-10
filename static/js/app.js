@@ -730,17 +730,7 @@ function handleFileSelect(e) {
         // Video playback (both user and admin)
         const videoURL = URL.createObjectURL(file);
         
-        // Show video preview
-        if (videoPreview) {
-            // Revoke old URL if exists
-            if (videoPreview.src && videoPreview.src.startsWith('blob:')) {
-                URL.revokeObjectURL(videoPreview.src);
-            }
-            videoPreview.src = videoURL;
-            videoPreview.style.display = 'block';
-        }
-        
-        // Show video player section for admin (real-time detection)
+        // For admin: Show video player only (hide preview section completely to avoid duplicate)
         if (currentUser && currentUser.role === 'admin' && videoPlayerSection) {
             videoPlayerSection.style.display = 'block';
             if (videoPlayer) {
@@ -750,13 +740,27 @@ function handleFileSelect(e) {
                 }
                 videoPlayer.src = videoURL;
                 
-                // Start video detection when video plays (admin only)
+                // Auto-play video when loaded
                 videoPlayer.onloadedmetadata = () => {
-                    startVideoDetection(videoPlayer);
+                    videoPlayer.play().catch(e => {
+                        console.log('Auto-play prevented:', e);
+                    });
                 };
             }
-        } else if (videoPlayerSection) {
-            videoPlayerSection.style.display = 'none';
+            // Hide preview section completely for admin (use video player instead)
+            if (videoPreview) videoPreview.style.display = 'none';
+            if (preview) preview.style.display = 'none';
+        } else {
+            // For regular users: Show video preview only
+            if (videoPreview) {
+                // Revoke old URL if exists
+                if (videoPreview.src && videoPreview.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(videoPreview.src);
+                }
+                videoPreview.src = videoURL;
+                videoPreview.style.display = 'block';
+            }
+            if (videoPlayerSection) videoPlayerSection.style.display = 'none';
         }
         
         if (imagePreview) imagePreview.style.display = 'none';
@@ -900,6 +904,34 @@ async function processUpload() {
         return;
     }
     
+    // For video files and admin: Start playing video immediately when Process is clicked
+    if (file.type.startsWith('video/') && currentUser && currentUser.role === 'admin') {
+        const videoPlayer = document.getElementById('videoPlayer');
+        if (videoPlayer && videoPlayer.src) {
+            // Reset video to start
+            videoPlayer.currentTime = 0;
+            // Play video immediately (synchronized with processing)
+            videoPlayer.play().catch(e => {
+                console.log('Auto-play prevented:', e);
+            });
+            // Start detection if not already started
+            if (!videoDetectionActive) {
+                startVideoDetection(videoPlayer);
+            }
+        }
+    }
+    
+    // For regular users with video: Also play video when Process is clicked
+    if (file.type.startsWith('video/') && (!currentUser || currentUser.role !== 'admin')) {
+        const videoPreview = document.getElementById('videoPreview');
+        if (videoPreview && videoPreview.src) {
+            videoPreview.currentTime = 0;
+            videoPreview.play().catch(e => {
+                console.log('Auto-play prevented:', e);
+            });
+        }
+    }
+    
     // Show loading
     document.getElementById('loading').style.display = 'block';
     document.getElementById('result').style.display = 'none';
@@ -908,7 +940,7 @@ async function processUpload() {
         const formData = new FormData();
         formData.append('file', file);
         
-        // Choose endpoint based on file type (only for admin)
+        // Choose endpoint based on file type
         // Use /detect-video for videos, /detect for images
         const endpoint = file.type.startsWith('video/') 
             ? '/detect-video' 
@@ -1039,19 +1071,85 @@ function showVideoResult(result) {
         const uniquePlates = result.unique_plates || [];
         const framesProcessed = result.frames_processed || 0;
         const recordsSaved = result.records_saved || 0;
+        const platesWithDetails = result.plates_with_details || [];
+        
+        // Build plates list with duplicate information
+        let platesListHTML = '';
+        if (platesWithDetails.length > 0) {
+            platesListHTML = platesWithDetails.map(plate => {
+                const statusBadge = plate.is_new_plate 
+                    ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">🆕 NEW</span>'
+                    : `<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">🔄 DUPLICATE (${plate.seen_count || 1}x)</span>`;
+                
+                let duplicateInfo = '';
+                if (plate.duplicate_records && plate.duplicate_records.length > 0) {
+                    duplicateInfo = `
+                        <div style="margin-top: 8px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 3px solid #f59e0b;">
+                            <div style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 6px;">
+                                🔄 ซ้ำกับ ${plate.duplicate_records.length} รายการ:
+                            </div>
+                            <div style="font-size: 11px; color: #78350f;">
+                                ${plate.duplicate_records.map((dup, idx) => 
+                                    `• ID ${dup.id}: ${dup.plate_text || 'N/A'} (${dup.created_at ? new Date(dup.created_at).toLocaleDateString('th-TH') : 'N/A'})`
+                                ).join('<br>')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div style="padding: 12px; margin-bottom: 10px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <strong style="color: #1e3a8a; font-size: 16px;">${plate.plate_text || 'N/A'}</strong>
+                                    ${statusBadge}
+                                </div>
+                                <div style="color: #64748b; font-size: 12px; margin-top: 4px;">
+                                    Confidence: ${plate.confidence ? (plate.confidence * 100).toFixed(1) + '%' : 'N/A'}
+                                </div>
+                                ${duplicateInfo}
+                            </div>
+                            ${plate.plate_image ? `
+                                <img src="${plate.plate_image}" 
+                                     style="width: 80px; height: 50px; object-fit: cover; border-radius: 6px; border: 2px solid #e5e7eb; cursor: pointer; margin-left: 10px;" 
+                                     onclick="showImageModal('${plate.plate_image}')"
+                                     alt="Plate ${plate.plate_text}">
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else if (uniquePlates.length > 0) {
+            // Fallback to simple list if details not available
+            platesListHTML = uniquePlates.map(plate => 
+                `<li style="margin: 5px 0; padding: 8px; background: white; border-radius: 6px;">${plate}</li>`
+            ).join('');
+        }
         
         resultDiv.innerHTML = `
             <h3 style="color: #1e3a8a; font-size: 20px; font-weight: 600; margin-bottom: 15px;">📹 Video Processing Complete</h3>
             <div class="result-card" style="background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb;">
-                <p style="margin: 10px 0;"><strong style="color: #1e3a8a;">Frames Processed:</strong> <span style="color: #64748b;">${framesProcessed}</span></p>
-                <p style="margin: 10px 0;"><strong style="color: #1e3a8a;">Unique Plates Found:</strong> <span style="color: #64748b;">${uniquePlates.length}</span></p>
-                <p style="margin: 10px 0;"><strong style="color: #1e3a8a;">Records Saved:</strong> <span style="color: #64748b;">${recordsSaved}</span></p>
-                ${uniquePlates.length > 0 ? `
-                    <div style="margin-top: 15px;">
-                        <strong style="color: #1e3a8a;">Detected Plates:</strong>
-                        <ul style="margin: 10px 0 0 20px; color: #64748b;">
-                            ${uniquePlates.map(plate => `<li style="margin: 5px 0;">${plate}</li>`).join('')}
-                        </ul>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Frames Processed</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #1e3a8a;">${framesProcessed}</div>
+                    </div>
+                    <div style="padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #10b981;">
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Unique Plates</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #1e3a8a;">${uniquePlates.length}</div>
+                    </div>
+                    <div style="padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Records Saved</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #1e3a8a;">${recordsSaved}</div>
+                    </div>
+                </div>
+                ${platesWithDetails.length > 0 || uniquePlates.length > 0 ? `
+                    <div style="margin-top: 20px;">
+                        <strong style="color: #1e3a8a; font-size: 16px; display: block; margin-bottom: 12px;">Detected Plates:</strong>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            ${platesListHTML}
+                        </div>
                     </div>
                 ` : '<p style="margin: 10px 0; color: #64748b;">No license plates detected in video.</p>'}
             </div>

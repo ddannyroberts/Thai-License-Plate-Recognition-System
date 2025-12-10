@@ -1798,3 +1798,14 @@ table tbody tr:last-child td {
     }
 }
 
+/* Hide video preview for admin (use video player instead) */
+.admin-only ~ #preview .user-video-preview,
+.admin-only ~ #preview #videoPreview {
+    display: none !important;
+}
+
+/* Ensure video player is visible for admin */
+#videoPlayerSection.admin-only {
+    display: block !important;
+}
+

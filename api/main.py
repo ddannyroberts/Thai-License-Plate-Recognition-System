@@ -472,39 +472,14 @@ async def detect(
         except Exception:
             conf = None
     
-    # Method 1: Character Segmentation (แยกตัวอักษรทีละตัวก่อน OCR)
+    # Use full OCR directly (skip character segmentation to avoid incorrect readings)
     try:
-        from .character_segmentation import read_plate_by_characters
-        segmented_text, character_details = read_plate_by_characters(img_for_ocr)
-        
-        # Validate result: ต้องมีอย่างน้อย 2 ตัวอักษร และไม่ใช่ noise
-        if segmented_text and len(segmented_text) >= 2:
-            # ตรวจสอบว่าเป็นรูปแบบป้ายทะเบียนที่ถูกต้อง (มีตัวเลขหรือตัวอักษรไทย)
-            import re
-            # Pattern: ต้องมีตัวเลขหรือตัวอักษรไทยอย่างน้อย 2 ตัว
-            valid_pattern = re.compile(r'[ก-ฮ0-9]')
-            valid_chars = valid_pattern.findall(segmented_text)
-            
-            if len(valid_chars) >= 2:
-                plate_text = segmented_text
-                print(f"DEBUG Character Segmentation result: {plate_text} ({len(character_details)} chars)", flush=True)
-            else:
-                print(f"DEBUG: Character segmentation result '{segmented_text}' seems invalid, falling back to full OCR", flush=True)
-                raise ValueError("Segmentation result validation failed")
-        else:
-            # Fallback to full OCR if segmentation failed
-            print("DEBUG: Character segmentation failed, falling back to full OCR", flush=True)
-            raise ValueError("Segmentation returned empty result")
-            
-    except Exception as e:
-        print(f"DEBUG Character segmentation error: {e}, using fallback OCR", flush=True)
-        # Method 2: Fallback to full OCR (traditional method)
-        try:
-            h_, w_ = img_for_ocr.shape[:2]
-            plate_text = _clean_text(run_ocr_on_bbox(img_for_ocr, 0, 0, w_, h_))
-            print(f"DEBUG Fallback OCR result: {plate_text}", flush=True)
-        except Exception as ocr_error:
-            print(f"DEBUG Fallback OCR error: {ocr_error}", flush=True)
+        h_, w_ = img_for_ocr.shape[:2]
+        plate_text = _clean_text(run_ocr_on_bbox(img_for_ocr, 0, 0, w_, h_))
+        print(f"DEBUG Full OCR result: {plate_text}", flush=True)
+    except Exception as ocr_error:
+        print(f"DEBUG OCR error: {ocr_error}", flush=True)
+        plate_text = ""
 
     # --- Parse province from plate_text ---
     if plate_text and not province_text:
@@ -634,8 +609,8 @@ async def detect(
 async def detect_video(
     file: UploadFile | None = File(default=None),
     video_url: str | None = Form(default=None),
-    frame_stride: int = int(os.getenv("VIDEO_FRAME_STRIDE", "10")),
-    max_frames: int = int(os.getenv("VIDEO_MAX_FRAMES", "600")),
+    frame_stride: int = int(os.getenv("VIDEO_FRAME_STRIDE", "30")),  # Increased from 10 to 30 for faster processing
+    max_frames: int = int(os.getenv("VIDEO_MAX_FRAMES", "300")),  # Reduced from 600 to 300
     open_gate_first: bool = os.getenv("VIDEO_OPEN_GATE_FIRST", "true").lower() == "true"
 ):
     if not file and not video_url:
@@ -670,6 +645,8 @@ async def detect_video(
 
     seen_plates: Set[str] = set()
     saved_ids: List[int] = []
+    plate_details: dict = {}  # Store plate details with duplicate info: {plate_text: {"is_new": bool, "duplicate_records": list, "seen_count": int}}
+    duplicate_cache: dict = {}  # Cache duplicate check results: {normalized_plate: {"is_new": bool, "duplicate_records": list, "seen_count": int, "first_seen_at": datetime}}
     session_id = uuid4().hex
 
     i = 0
@@ -772,6 +749,59 @@ async def detect_video(
             except: pass
             continue
 
+        # --- Check if plate has been seen before (for duplicate tracking) ---
+        normalized_plate = _normalize_plate(plate_text)
+        is_new_plate = True
+        seen_count = 1
+        first_seen_at = datetime.utcnow()
+        duplicate_records = []
+        
+        # Use cache to avoid repeated database queries for the same plate (OPTIMIZATION)
+        if normalized_plate and normalized_plate in duplicate_cache:
+            cached = duplicate_cache[normalized_plate]
+            is_new_plate = cached["is_new_plate"]
+            seen_count = cached["seen_count"] + 1  # Increment for this detection
+            first_seen_at = cached["first_seen_at"]
+            duplicate_records = cached["duplicate_records"].copy() if cached["duplicate_records"] else []
+        elif normalized_plate:
+            # Only query database once per unique plate (OPTIMIZATION)
+            db_check = SessionLocal()
+            try:
+                # Find all existing records with same normalized plate
+                existing_records = db_check.query(PlateRecord).filter(
+                    func.replace(func.replace(PlateRecord.plate_text, " ", ""), "-", "") == normalized_plate
+                ).order_by(PlateRecord.created_at.asc()).all()
+                
+                if existing_records:
+                    is_new_plate = False
+                    first_seen_at = existing_records[0].first_seen_at or existing_records[0].created_at
+                    seen_count = len(existing_records) + 1
+                    
+                    # Collect duplicate record information (limit to first 10 for performance)
+                    for dup_rec in existing_records[:10]:
+                        duplicate_records.append({
+                            "id": dup_rec.id,
+                            "plate_text": dup_rec.plate_text,
+                            "plate_image": f"/uploads/plates/{dup_rec.plate_image_path}" if dup_rec.plate_image_path else None,
+                            "confidence": dup_rec.confidence,
+                            "created_at": dup_rec.created_at.isoformat() if dup_rec.created_at else None,
+                            "first_seen_at": (dup_rec.first_seen_at or dup_rec.created_at).isoformat() if (dup_rec.first_seen_at or dup_rec.created_at) else None
+                        })
+                else:
+                    is_new_plate = True
+                    seen_count = 1
+                    first_seen_at = datetime.utcnow()
+                
+                # Cache the result to avoid repeated queries
+                duplicate_cache[normalized_plate] = {
+                    "is_new_plate": is_new_plate,
+                    "seen_count": len(existing_records) if existing_records else 0,
+                    "duplicate_records": duplicate_records.copy(),
+                    "first_seen_at": first_seen_at
+                }
+            finally:
+                db_check.close()
+
         # --- Save cropped plate image from video ---
         plate_img_filename = None
         if crop is not None and crop.size > 0:
@@ -787,12 +817,26 @@ async def detect_video(
                 confidence=conf,
                 image_path=f"{image_path_for_db}#frame={i}",
                 plate_image_path=plate_img_filename,
-                detections_json=json.dumps({"frame_index": i, "rf": rf}, ensure_ascii=False)
+                detections_json=json.dumps({"frame_index": i, "rf": rf}, ensure_ascii=False),
+                is_new_plate=is_new_plate,
+                seen_count=seen_count,
+                first_seen_at=first_seen_at
             )
             db.add(rec)
             db.commit()
             db.refresh(rec)
             saved_ids.append(rec.id)
+            
+            # Store plate details for response (only for first occurrence of each plate)
+            if plate_text not in seen_plates:
+                plate_details[plate_text] = {
+                    "is_new_plate": is_new_plate,
+                    "seen_count": seen_count,
+                    "duplicate_records": duplicate_records,
+                    "plate_image": f"/uploads/plates/{plate_img_filename}" if plate_img_filename else None,
+                    "confidence": conf
+                }
+                seen_plates.add(plate_text)
         finally:
             db.close()
         
@@ -806,6 +850,7 @@ async def detect_video(
             "source": "video"
         })
 
+        # Only check gate for first occurrence of each plate (avoid repeated checks - OPTIMIZATION)
         if open_gate_first and (plate_text not in seen_plates):
             ok, reason = should_open(plate_text, conf)
             print(f"[GATE(video)] ok={ok} reason={reason} plate='{plate_text}' conf={conf}", flush=True)
@@ -813,7 +858,6 @@ async def detect_video(
                 try:
                     print("[SERIAL(video)] → OPEN", flush=True)
                     send_open_gate(plate_text)
-                    seen_plates.add(plate_text)
                 except Exception as e:
                     print("WARN serial(video):", e, flush=True)
 
@@ -825,12 +869,36 @@ async def detect_video(
         try: os.remove(local_video_path)
         except: pass
 
+    # Build plate details list with duplicate information
+    plates_with_details = []
+    for plate_text in sorted(seen_plates):
+        if plate_text in plate_details:
+            plates_with_details.append({
+                "plate_text": plate_text,
+                "is_new_plate": plate_details[plate_text]["is_new_plate"],
+                "seen_count": plate_details[plate_text]["seen_count"],
+                "duplicate_records": plate_details[plate_text]["duplicate_records"],
+                "plate_image": plate_details[plate_text]["plate_image"],
+                "confidence": plate_details[plate_text]["confidence"]
+            })
+        else:
+            # Fallback if plate not in details
+            plates_with_details.append({
+                "plate_text": plate_text,
+                "is_new_plate": True,
+                "seen_count": 1,
+                "duplicate_records": None,
+                "plate_image": None,
+                "confidence": None
+            })
+    
     return {
         "session_id": session_id,
         "frames_processed": processed,
         "unique_plates": sorted(list(seen_plates)),
         "records_saved": len(saved_ids),
-        "sample_record_ids": saved_ids[:10]
+        "sample_record_ids": saved_ids[:10],
+        "plates_with_details": plates_with_details
     }
 
 # =============================
