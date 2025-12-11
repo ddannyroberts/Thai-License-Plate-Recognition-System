@@ -9,7 +9,7 @@ echo "=================================================="
 # Set environment variables (using SQLite for local development)
 export DATABASE_URL="sqlite:///./data.db"
 export SERIAL_ENABLED="true"
-export SERIAL_PORT="/dev/cu.usbmodem1201"  # macOS: /dev/cu.usbmodem*, Linux: /dev/ttyACM0
+export SERIAL_PORT="/dev/cu.usbmodem11201"  # macOS: /dev/cu.usbmodem*, Linux: /dev/ttyACM0
 export SERIAL_BAUD="115200"                  # Must match Arduino Serial.begin(115200)
 export GATE_MODE="per_plate_cooldown"
 export GATE_COOLDOWN_SEC="10"

@@ -337,10 +337,12 @@ async function startCamera() {
         document.getElementById('cameraSection').style.display = 'block';
         document.getElementById('uploadArea').style.display = 'none';
         
-        // Start auto-capture
-        startAutoCapture();
-        
-        showNotification('Camera started! Detecting plates...', 'success');
+        // Wait a bit before starting auto-capture to ensure camera is ready
+        setTimeout(() => {
+            // Start auto-capture
+            startAutoCapture();
+            showNotification('Camera started! Detecting plates every 2 seconds...', 'success');
+        }, 1000);
         
     } catch (error) {
         console.error('Camera error:', error);
@@ -365,8 +367,22 @@ async function startWebRTCCamera() {
     
     if (videoPreview) {
         videoPreview.srcObject = cameraStream;
-        videoPreview.play();
+        await videoPreview.play();
         videoPreview.style.display = 'block';
+        
+        // Wait for video to be ready before starting detection
+        return new Promise((resolve) => {
+            videoPreview.addEventListener('loadedmetadata', () => {
+                console.log('Video ready. Dimensions:', videoPreview.videoWidth, 'x', videoPreview.videoHeight);
+                resolve();
+            }, { once: true });
+            
+            // Fallback timeout
+            setTimeout(() => {
+                console.log('Video metadata timeout, proceeding anyway...');
+                resolve();
+            }, 2000);
+        });
     }
     
     if (droidcamPreview) {
@@ -463,8 +479,11 @@ function stopCamera() {
 
 function startAutoCapture() {
     captureInterval = setInterval(async () => {
-        if (isCameraActive && cameraStream) {
-            await captureAndProcess();
+        if (isCameraActive) {
+            // For WebRTC: check cameraStream, for DroidCam: check droidcamURL
+            if ((cameraSource === 'webrtc' && cameraStream) || (cameraSource === 'droidcam' && droidcamURL)) {
+                await captureAndProcess();
+            }
         }
     }, CAMERA_CAPTURE_INTERVAL);
 }
@@ -485,7 +504,14 @@ async function captureAndProcess() {
 
 async function processWebRTCFrame() {
     const video = document.getElementById('cameraPreview');
-    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+    if (!video) {
+        console.warn('Video element not found');
+        return;
+    }
+    
+    // Wait for video to be ready
+    if (video.readyState < video.HAVE_CURRENT_DATA || video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log('Video not ready yet, waiting...');
         return;
     }
     
@@ -498,51 +524,67 @@ async function processWebRTCFrame() {
     
     // Convert to blob
     canvas.toBlob(async (blob) => {
-        if (blob) {
-            // Send to API - ใช้ model จับและอ่านป้ายทะเบียน
-            const formData = new FormData();
-            formData.append('file', blob, 'camera_capture.jpg');
+        if (!blob) {
+            console.warn('Failed to create blob from canvas');
+            return;
+        }
+        
+        // Send to API - ใช้ model จับและอ่านป้ายทะเบียน
+        const formData = new FormData();
+        formData.append('file', blob, 'camera_capture.jpg');
+        
+        // Add session token for user identification
+        if (sessionToken) {
+            formData.append('session_token', sessionToken);
+        }
+        
+        try {
+            console.log('Sending frame to /detect API...');
+            const response = await fetch('/detect', {
+                method: 'POST',
+                body: formData
+            });
             
-            try {
-                const response = await fetch('/detect', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                    console.error('Detection API error:', errorData);
-                    return;
-                }
-                
-                const result = await response.json();
-                
-                // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
-                if (result.plate_text && result.plate_text.length >= 2) {
-                    // Show detection in UI
-                    showCameraDetection(result);
-                    
-                    // Highlight on video (optional)
-                    highlightDetection(video, ctx);
-                    
-                    // Refresh records if on records tab
-                    const recordsTab = document.getElementById('records');
-                    if (recordsTab && recordsTab.classList.contains('active')) {
-                        loadRecords();
-                    }
-                    
-                    // Refresh plate status if admin
-                    if (currentUser && currentUser.role === 'admin') {
-                        loadPlateStatus();
-                    }
-                } else {
-                    // No plate detected, but still log for debugging
-                    console.log('No plate detected in frame');
-                }
-                
-            } catch (error) {
-                console.error('Detection error:', error);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                console.error('Detection API error:', errorData);
+                showNotification('Detection failed: ' + (errorData.detail || 'Unknown error'), 'error');
+                return;
             }
+            
+            const result = await response.json();
+            console.log('Detection result:', result);
+            
+            // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
+            if (result.plate_text && result.plate_text.length >= 2) {
+                // Show detection in UI
+                showCameraDetection(result);
+                
+                // Highlight on video (optional)
+                highlightDetection(video, ctx);
+                
+                // Refresh records if on records tab
+                const recordsTab = document.getElementById('records');
+                if (recordsTab && recordsTab.classList.contains('active')) {
+                    loadRecords();
+                }
+                
+                // Refresh plate status if admin
+                if (currentUser && currentUser.role === 'admin') {
+                    loadPlateStatus();
+                }
+            } else {
+                // No plate detected, but still log for debugging
+                console.log('No plate detected in frame (plate_text:', result.plate_text, ')');
+                // Show debug info in console
+                if (result.confidence !== undefined) {
+                    console.log('Detection attempted but no valid plate text found. Confidence:', result.confidence);
+                }
+            }
+            
+        } catch (error) {
+            console.error('Detection error:', error);
+            showNotification('Detection error: ' + error.message, 'error');
         }
     }, 'image/jpeg', 0.8);
 }
@@ -552,11 +594,22 @@ async function processDroidcamFrame() {
     // Backend will fetch the frame from the IP camera using cv2.VideoCapture
     // แล้วใช้ model จับและอ่านป้ายทะเบียน
     
+    if (!droidcamURL) {
+        console.warn('DroidCam URL not set');
+        return;
+    }
+    
     // Use the base URL (no timestamp needed for MJPEG stream)
     try {
         const formData = new FormData();
         formData.append('image_url', droidcamURL);
         
+        // Add session token for user identification
+        if (sessionToken) {
+            formData.append('session_token', sessionToken);
+        }
+        
+        console.log('Sending DroidCam URL to /detect API:', droidcamURL);
         const response = await fetch('/detect', {
             method: 'POST',
             body: formData
@@ -565,10 +618,12 @@ async function processDroidcamFrame() {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
             console.error('Detection API error:', errorData);
+            showNotification('Detection failed: ' + (errorData.detail || 'Unknown error'), 'error');
             return;
         }
         
         const result = await response.json();
+        console.log('DroidCam detection result:', result);
         
         // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
         if (result.plate_text && result.plate_text.length >= 2) {
@@ -593,7 +648,11 @@ async function processDroidcamFrame() {
             }
         } else {
             // No plate detected, but still log for debugging
-            console.log('No plate detected in DroidCam frame');
+            console.log('No plate detected in DroidCam frame (plate_text:', result.plate_text, ')');
+            // Show debug info in console
+            if (result.confidence !== undefined) {
+                console.log('Detection attempted but no valid plate text found. Confidence:', result.confidence);
+            }
         }
         
     } catch (error) {
@@ -624,7 +683,7 @@ function showCameraDetection(result) {
             <div class="detection-confidence" style="color: #64748b; font-size: 12px;">Confidence: ${result.confidence ? (result.confidence * 100).toFixed(1) + '%' : 'N/A'}</div>
             ${result.plate_image ? `<img src="${result.plate_image}" style="width: 60px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; cursor: pointer;" onclick="showImageModal('${result.plate_image}')" alt="Plate">` : ''}
         </div>
-        ${result.duplicate_records && result.duplicate_records.length > 0 ? `
+        ${(currentUser && currentUser.role === 'admin' && result.duplicate_records && result.duplicate_records.length > 0) ? `
             <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280;">
                 🔄 ซ้ำกับ ${result.duplicate_records.length} รายการ
             </div>
@@ -940,6 +999,11 @@ async function processUpload() {
         const formData = new FormData();
         formData.append('file', file);
         
+        // Add session token for user identification
+        if (sessionToken) {
+            formData.append('session_token', sessionToken);
+        }
+        
         // Choose endpoint based on file type
         // Use /detect-video for videos, /detect for images
         const endpoint = file.type.startsWith('video/') 
@@ -989,20 +1053,24 @@ function showImageResult(result) {
         ? (result.confidence * 100).toFixed(2) 
         : 'N/A';
     
-    // Show plate status (new or duplicate) for admin
+    // Show plate status (new or duplicate) for admin only
     const gateStatusEl = document.getElementById('gateStatus');
-    if (gateStatusEl && currentUser && currentUser.role === 'admin') {
-        if (result.is_new_plate) {
-            gateStatusEl.innerHTML = '<span style="color: #10b981;">🆕 ป้ายใหม่</span>';
+    if (gateStatusEl) {
+        if (currentUser && currentUser.role === 'admin') {
+            // Admin: Show plate status (new or duplicate)
+            if (result.is_new_plate) {
+                gateStatusEl.innerHTML = '<span style="color: #10b981;">🆕 ป้ายใหม่</span>';
+            } else {
+                gateStatusEl.innerHTML = `<span style="color: #f59e0b;">🔄 ป้ายซ้ำ (เจอแล้ว ${result.seen_count || 1} ครั้ง)</span>`;
+            }
         } else {
-            gateStatusEl.innerHTML = `<span style="color: #f59e0b;">🔄 ป้ายซ้ำ (เจอแล้ว ${result.seen_count || 1} ครั้ง)</span>`;
+            // User: Hide gate status (user cannot control gate)
+            gateStatusEl.style.display = 'none';
         }
-    } else if (gateStatusEl) {
-        gateStatusEl.textContent = result.gate_opened ? '✅ Opened' : '❌ Not Opened';
     }
     
-    // Show duplicate records if any
-    if (result.duplicate_records && result.duplicate_records.length > 0) {
+    // Show duplicate records if any (only for admin)
+    if (currentUser && currentUser.role === 'admin' && result.duplicate_records && result.duplicate_records.length > 0) {
         showDuplicateRecords(result.duplicate_records, resultDiv);
     }
     
@@ -1082,7 +1150,8 @@ function showVideoResult(result) {
                     : `<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">🔄 DUPLICATE (${plate.seen_count || 1}x)</span>`;
                 
                 let duplicateInfo = '';
-                if (plate.duplicate_records && plate.duplicate_records.length > 0) {
+                // Only show duplicate info for admin users
+                if (currentUser && currentUser.role === 'admin' && plate.duplicate_records && plate.duplicate_records.length > 0) {
                     duplicateInfo = `
                         <div style="margin-top: 8px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 3px solid #f59e0b;">
                             <div style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 6px;">
@@ -1172,6 +1241,10 @@ async function loadRecords(searchQuery = '') {
         if (searchQuery) {
             url += `&search=${encodeURIComponent(searchQuery)}`;
         }
+        // Add session token for user filtering
+        if (sessionToken) {
+            url += `&session_token=${encodeURIComponent(sessionToken)}`;
+        }
         
         const response = await fetch(url);
         const data = await response.json();
@@ -1220,7 +1293,12 @@ function displayRecords(records) {
 // ===== Admin Functions =====
 async function loadStats() {
     try {
-        const response = await fetch('/api/stats');
+        let url = '/api/stats';
+        // Add session token for user filtering
+        if (sessionToken) {
+            url += `?session_token=${encodeURIComponent(sessionToken)}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         
         document.getElementById('totalRecords').textContent = data.total_records || 0;

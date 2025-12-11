@@ -273,7 +273,8 @@ def should_open(plate_text: str, conf: float | None) -> Tuple[bool, str]:
 @app.post("/detect", response_model=PlateCreateResponse)
 async def detect(
     file: UploadFile | None = File(default=None),
-    image_url: str | None = Form(default=None)
+    image_url: str | None = Form(default=None),
+    session_token: str | None = Form(default=None)
 ):
     """
     Detect license plate from image or video file.
@@ -534,8 +535,16 @@ async def detect(
                         "first_seen_at": (dup_rec.first_seen_at or dup_rec.created_at).isoformat() if (dup_rec.first_seen_at or dup_rec.created_at) else None
                     })
         
+        # --- Get user_id and role from session ---
+        user_id = None
+        is_admin = False
+        if session_token and session_token in sessions:
+            user_id = sessions[session_token].get("id")
+            is_admin = sessions[session_token].get("role") == "admin"
+        
         # --- Save DB ---
         rec = PlateRecord(
+            user_id=user_id,  # Save user_id who uploaded this record
             plate_text=plate_text or "",
             province_text=province_text or "",
             confidence=conf,
@@ -553,6 +562,11 @@ async def detect(
         db.add(rec)
         db.commit()
         db.refresh(rec)
+        print(f"[DB] ✅ Record saved to database: ID={rec.id}, plate_text='{plate_text}', is_new_plate={is_new_plate}", flush=True)
+    except Exception as db_error:
+        db.rollback()
+        print(f"[DB] ❌ Failed to save record: {db_error}", flush=True)
+        raise
     finally:
         db.close()
     
@@ -565,30 +579,55 @@ async def detect(
         "timestamp": datetime.utcnow().isoformat()
     })
 
-    # --- Decide & THEN trigger Arduino ---
-    ok, reason = should_open(plate_text or "", conf)
-    print(f"[GATE] decision ok={ok} reason={reason} plate='{plate_text}' conf={conf}", flush=True)
+    # --- AFTER database save: Decide & trigger Arduino (only for admin) ---
+    gate_opened = False
+    print(f"[GATE] ════════════════════════════════════════════════════════", flush=True)
+    print(f"[GATE] Database saved successfully. Checking gate control...", flush=True)
+    print(f"[GATE] Admin status: is_admin={is_admin}, user_id={user_id}, session_token={'present' if session_token else 'missing'}", flush=True)
+    print(f"[GATE] Plate info: plate_text='{plate_text}', confidence={conf}, record_id={rec.id}", flush=True)
+    
+    # Only open gate if:
+    # 1. User is admin
+    # 2. Plate text is valid (not empty, length >= 2)
+    # 3. Record was successfully saved to database
+    if is_admin and plate_text and len(plate_text.strip()) >= 2:
+        ok, reason = should_open(plate_text or "", conf)
+        print(f"[GATE] Decision: ok={ok}, reason={reason}", flush=True)
 
-    if ok:
-        try:
-            print("[SERIAL] → OPEN", flush=True)
-            success = send_open_gate(plate_text or "")
-            if success:
-                print(f"[GATE] ✅ Gate opened successfully for plate: {plate_text}", flush=True)
-                await manager.broadcast({
-                    "type": "gate",
-                    "action": "opened",
-                    "plate_text": plate_text or "",
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-            else:
-                print(f"[GATE] ⚠️ Gate command sent but no ACK received", flush=True)
-        except Exception as e:
-            # อย่าให้ API พังถ้า serial ล้มเหลว
-            print(f"[GATE] ❌ WARN serial error: {e}", flush=True)
-            import traceback
-            print(f"[GATE] Traceback: {traceback.format_exc()}", flush=True)
+        if ok:
+            try:
+                print("[GATE] 🚪 Admin user - Opening gate AFTER database save...", flush=True)
+                print(f"[GATE] Record ID {rec.id} saved. Plate: '{plate_text}'", flush=True)
+                print("[SERIAL] → Sending OPEN command to Arduino", flush=True)
+                success = send_open_gate(plate_text or "")
+                if success:
+                    gate_opened = True
+                    print(f"[GATE] ✅ Gate opened successfully for plate: {plate_text} (Record ID: {rec.id})", flush=True)
+                    await manager.broadcast({
+                        "type": "gate",
+                        "action": "opened",
+                        "plate_text": plate_text or "",
+                        "record_id": rec.id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                else:
+                    print(f"[GATE] ⚠️ Gate command sent but no ACK received from Arduino", flush=True)
+                    print(f"[GATE] ⚠️ Check: 1) Arduino is connected, 2) SERIAL_ENABLED=true, 3) SERIAL_PORT is correct", flush=True)
+            except Exception as e:
+                # อย่าให้ API พังถ้า serial ล้มเหลว
+                print(f"[GATE] ❌ WARN serial error: {e}", flush=True)
+                import traceback
+                print(f"[GATE] Traceback: {traceback.format_exc()}", flush=True)
+        else:
+            print(f"[GATE] ⚠️ Gate decision: NOT opening (reason: {reason})", flush=True)
+    elif not is_admin:
+        print(f"[GATE] ⚠️ User is not admin (role: {sessions.get(session_token, {}).get('role', 'unknown') if session_token else 'no session'}), gate will not open", flush=True)
+    elif not plate_text or len(plate_text.strip()) < 2:
+        print(f"[GATE] ⚠️ Invalid plate text: '{plate_text}', gate will not open", flush=True)
+    print(f"[GATE] ════════════════════════════════════════════════════════", flush=True)
 
+    # --- Prepare response data ---
+    # Only send duplicate_records for admin users
     response_data = {
         "id": rec.id,
         "plate_text": plate_text or "",
@@ -596,8 +635,9 @@ async def detect(
         "confidence": conf,
         "is_new_plate": is_new_plate,
         "seen_count": seen_count,
-        "duplicate_records": duplicate_records if duplicate_records else None,
-        "plate_image": f"/uploads/plates/{plate_img_filename}" if plate_img_filename else None
+        "duplicate_records": duplicate_records if (duplicate_records and is_admin) else None,
+        "plate_image": f"/uploads/plates/{plate_img_filename}" if plate_img_filename else None,
+        "gate_opened": gate_opened
     }
     
     return PlateCreateResponse(**response_data)
@@ -611,7 +651,8 @@ async def detect_video(
     video_url: str | None = Form(default=None),
     frame_stride: int = int(os.getenv("VIDEO_FRAME_STRIDE", "30")),  # Increased from 10 to 30 for faster processing
     max_frames: int = int(os.getenv("VIDEO_MAX_FRAMES", "300")),  # Reduced from 600 to 300
-    open_gate_first: bool = os.getenv("VIDEO_OPEN_GATE_FIRST", "true").lower() == "true"
+    open_gate_first: bool = os.getenv("VIDEO_OPEN_GATE_FIRST", "true").lower() == "true",
+    session_token: str | None = Form(default=None)
 ):
     if not file and not video_url:
         return JSONResponse(status_code=400, content={"detail": "Provide video file or video_url"})
@@ -809,9 +850,17 @@ async def detect_video(
             plate_img_path = f"uploads/plates/{plate_img_filename}"
             cv2.imwrite(plate_img_path, crop)
         
+        # --- Get user_id and role from session ---
+        user_id = None
+        is_admin = False
+        if session_token and session_token in sessions:
+            user_id = sessions[session_token].get("id")
+            is_admin = sessions[session_token].get("role") == "admin"
+        
         db = SessionLocal()
         try:
             rec = PlateRecord(
+                user_id=user_id,  # Save user_id who uploaded this record
                 plate_text=plate_text,
                 province_text=province_text,
                 confidence=conf,
@@ -826,17 +875,22 @@ async def detect_video(
             db.commit()
             db.refresh(rec)
             saved_ids.append(rec.id)
+            print(f"[DB(video)] ✅ Record saved to database: ID={rec.id}, plate_text='{plate_text}', is_new_plate={is_new_plate}", flush=True)
             
             # Store plate details for response (only for first occurrence of each plate)
             if plate_text not in seen_plates:
                 plate_details[plate_text] = {
                     "is_new_plate": is_new_plate,
                     "seen_count": seen_count,
-                    "duplicate_records": duplicate_records,
+                    "duplicate_records": duplicate_records if is_admin else None,  # Only include for admin
                     "plate_image": f"/uploads/plates/{plate_img_filename}" if plate_img_filename else None,
                     "confidence": conf
                 }
                 seen_plates.add(plate_text)
+        except Exception as db_error:
+            db.rollback()
+            print(f"[DB(video)] ❌ Failed to save record: {db_error}", flush=True)
+            raise
         finally:
             db.close()
         
@@ -850,16 +904,37 @@ async def detect_video(
             "source": "video"
         })
 
-        # Only check gate for first occurrence of each plate (avoid repeated checks - OPTIMIZATION)
-        if open_gate_first and (plate_text not in seen_plates):
+        # --- AFTER database save: Only check gate for first occurrence of each plate (only for admin) ---
+        if is_admin and open_gate_first and (plate_text not in seen_plates) and plate_text and len(plate_text.strip()) >= 2:
+            print(f"[GATE(video)] ════════════════════════════════════════════════════════", flush=True)
+            print(f"[GATE(video)] Database saved successfully. Checking gate control...", flush=True)
+            print(f"[GATE(video)] Record ID: {rec.id}, Plate: '{plate_text}', Confidence: {conf}", flush=True)
+            
             ok, reason = should_open(plate_text, conf)
-            print(f"[GATE(video)] ok={ok} reason={reason} plate='{plate_text}' conf={conf}", flush=True)
+            print(f"[GATE(video)] Decision: ok={ok}, reason={reason}", flush=True)
+            
             if ok:
                 try:
-                    print("[SERIAL(video)] → OPEN", flush=True)
-                    send_open_gate(plate_text)
+                    print("[GATE(video)] 🚪 Admin user - Opening gate AFTER database save...", flush=True)
+                    print(f"[GATE(video)] Record ID {rec.id} saved. Plate: '{plate_text}'", flush=True)
+                    print("[SERIAL(video)] → Sending OPEN command to Arduino", flush=True)
+                    success = send_open_gate(plate_text)
+                    if success:
+                        print(f"[GATE(video)] ✅ Gate opened successfully for plate: {plate_text} (Record ID: {rec.id})", flush=True)
+                    else:
+                        print(f"[GATE(video)] ⚠️ Gate command sent but no ACK received", flush=True)
+                        print(f"[GATE(video)] ⚠️ Check: 1) Arduino is connected, 2) SERIAL_ENABLED=true, 3) SERIAL_PORT is correct", flush=True)
                 except Exception as e:
-                    print("WARN serial(video):", e, flush=True)
+                    print(f"[GATE(video)] ❌ WARN serial error: {e}", flush=True)
+                    import traceback
+                    print(f"[GATE(video)] Traceback: {traceback.format_exc()}", flush=True)
+            else:
+                print(f"[GATE(video)] ⚠️ Gate decision: NOT opening (reason: {reason})", flush=True)
+            print(f"[GATE(video)] ════════════════════════════════════════════════════════", flush=True)
+        elif not is_admin:
+            print(f"[GATE(video)] ⚠️ User is not admin, gate will not open", flush=True)
+        elif not plate_text or len(plate_text.strip()) < 2:
+            print(f"[GATE(video)] ⚠️ Invalid plate text: '{plate_text}', gate will not open", flush=True)
 
         try: os.remove(tmp_img_path)
         except: pass
@@ -869,17 +944,23 @@ async def detect_video(
         try: os.remove(local_video_path)
         except: pass
 
-    # Build plate details list with duplicate information
+    # Get admin status from session (check once at the end)
+    is_admin_user = False
+    if session_token and session_token in sessions:
+        is_admin_user = sessions[session_token].get("role") == "admin"
+    
+    # Build plate details list with duplicate information (only for admin)
     plates_with_details = []
     for plate_text in sorted(seen_plates):
         if plate_text in plate_details:
+            plate_detail = plate_details[plate_text]
             plates_with_details.append({
                 "plate_text": plate_text,
-                "is_new_plate": plate_details[plate_text]["is_new_plate"],
-                "seen_count": plate_details[plate_text]["seen_count"],
-                "duplicate_records": plate_details[plate_text]["duplicate_records"],
-                "plate_image": plate_details[plate_text]["plate_image"],
-                "confidence": plate_details[plate_text]["confidence"]
+                "is_new_plate": plate_detail["is_new_plate"],
+                "seen_count": plate_detail["seen_count"],
+                "duplicate_records": plate_detail["duplicate_records"] if is_admin_user else None,
+                "plate_image": plate_detail["plate_image"],
+                "confidence": plate_detail["confidence"]
             })
         else:
             # Fallback if plate not in details
@@ -926,11 +1007,32 @@ async def serve_index():
 # API endpoints for frontend
 # =============================
 @app.get("/api/records")
-async def get_records(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
-    """Get paginated records"""
+async def get_records(
+    page: int = 1, 
+    limit: int = 20, 
+    session_token: str | None = None,
+    db: Session = Depends(get_db)
+):
+    """Get paginated records - User sees only their own records, Admin sees all"""
     offset = (page - 1) * limit
-    records = db.query(PlateRecord).order_by(desc(PlateRecord.created_at)).offset(offset).limit(limit).all()
-    total = db.query(func.count(PlateRecord.id)).scalar()
+    
+    # Get current user from session
+    user_id = None
+    is_admin = False
+    if session_token and session_token in sessions:
+        user_info = sessions[session_token]
+        user_id = user_info.get("id")
+        is_admin = user_info.get("role") == "admin"
+    
+    # Build query - filter by user_id if not admin
+    query = db.query(PlateRecord)
+    if not is_admin and user_id:
+        # User: only see their own records
+        query = query.filter(PlateRecord.user_id == user_id)
+    # Admin: see all records (no filter)
+    
+    records = query.order_by(desc(PlateRecord.created_at)).offset(offset).limit(limit).all()
+    total = query.count()
     
     return {
         "records": [
@@ -970,19 +1072,36 @@ async def get_record(record_id: int, db: Session = Depends(get_db)):
     }
 
 @app.get("/api/stats")
-async def get_stats(db: Session = Depends(get_db)):
-    """Get statistics for admin dashboard"""
+async def get_stats(
+    session_token: str | None = None,
+    db: Session = Depends(get_db)
+):
+    """Get statistics - User sees only their own stats, Admin sees all"""
     try:
-        total_records = db.query(func.count(PlateRecord.id)).scalar()
+        # Get current user from session
+        user_id = None
+        is_admin = False
+        if session_token and session_token in sessions:
+            user_info = sessions[session_token]
+            user_id = user_info.get("id")
+            is_admin = user_info.get("role") == "admin"
+        
+        # Build query - filter by user_id if not admin
+        base_query = db.query(PlateRecord)
+        if not is_admin and user_id:
+            # User: only see their own records
+            base_query = base_query.filter(PlateRecord.user_id == user_id)
+        # Admin: see all records (no filter)
+        
+        total_records = base_query.count()
         
         # Today's records
         today = datetime.utcnow().date()
-        today_records = db.query(func.count(PlateRecord.id)).filter(
-            func.date(PlateRecord.created_at) == today
-        ).scalar()
+        today_query = base_query.filter(func.date(PlateRecord.created_at) == today)
+        today_records = today_query.count()
         
         # Average confidence
-        avg_confidence = db.query(func.avg(PlateRecord.confidence)).scalar()
+        avg_confidence = base_query.with_entities(func.avg(PlateRecord.confidence)).scalar()
         
         return {
             "total_records": total_records or 0,
