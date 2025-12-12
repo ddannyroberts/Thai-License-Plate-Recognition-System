@@ -119,27 +119,21 @@ def run_ocr_on_bbox(img: np.ndarray, x: int, y: int, w: int, h: int) -> str:
         new_w = int(w * scale)
         new_h = int(h * scale)
         roi = cv2.resize(roi, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)  # ใช้ LANCZOS4 แทน CUBIC เพื่อความคมชัด
-        print(f"DEBUG OCR upscale: {w}x{h} -> {new_w}x{new_h} (scale={scale:.1f}x)", flush=True)
+        # ลด logging เพื่อเพิ่มความเร็ว
+        # print(f"DEBUG OCR upscale: {w}x{h} -> {new_w}x{new_h} (scale={scale:.1f}x)", flush=True)
 
     variants: List[np.ndarray] = []
 
-    # พื้นฐาน
-    variants.append(roi)
-    variants.append(_sharp(roi))
-    variants.append(_clahe(roi))
-
+    # ลด variants เพื่อเพิ่มความเร็ว (จาก 12 เป็น 4)
+    variants.append(roi)  # Original
+    
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    variants.append(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
-    variants.append(cv2.cvtColor(_th_otsu(gray), cv2.COLOR_GRAY2BGR))
-    variants.append(cv2.cvtColor(_th_adapt(gray), cv2.COLOR_GRAY2BGR))
+    variants.append(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))  # Grayscale
+    variants.append(cv2.cvtColor(_th_otsu(gray), cv2.COLOR_GRAY2BGR))  # Otsu threshold
+    variants.append(cv2.bitwise_not(variants[0]))  # Inverted original
 
-    # กลับค่า (บางแผ่นพื้นอ่อน/ตัวอักษรเข้ม)
-    for i in range(len(variants)):
-        inv = cv2.bitwise_not(variants[i])
-        variants.append(inv)
-
-    # รันด้วย psm หลัก ๆ ที่ใช้ได้ดีกับป้าย
-    psms = [7, 6, 8, 13]
+    # ลด psm options เพื่อเพิ่มความเร็ว (จาก 4 เป็น 2)
+    psms = [7, 6]  # ใช้เฉพาะ psm ที่ดีที่สุด
 
     cands: List[str] = []
     for v in variants:

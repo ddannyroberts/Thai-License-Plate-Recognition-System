@@ -229,8 +229,8 @@
                         <h3 style="color: #1e3a8a; font-size: 18px; font-weight: 600; margin-bottom: 15px;">Preview:</h3>
                         <div style="text-align: center; background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb;">
                             <img id="imagePreview" style="max-width: 100%; max-height: 400px; display:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 0 auto;">
-                            <!-- videoPreview: แสดงเฉพาะสำหรับ user (ไม่ใช่ admin) -->
-                            <video id="videoPreview" controls class="user-video-preview" style="max-width: 100%; max-height: 400px; display:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 0 auto;"></video>
+                            <!-- videoPreview: แสดงสำหรับทั้ง admin และ user -->
+                            <video id="videoPreview" controls preload="metadata" style="max-width: 100%; max-height: 500px; width: auto; height: auto; display:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 0 auto; background: #000;"></video>
                         </div>
                     </div>
 
@@ -238,10 +238,16 @@
 
                     <div id="result" style="display:none;">
                         <h3>Result:</h3>
-                        <div class="result-card">
+                        <div class="result-card" id="resultCard">
+                            <div id="plateStatusBadge" style="margin-bottom: 15px;"></div>
                             <p><strong>Plate Text:</strong> <span id="plateText"></span></p>
+                            <p><strong>Province:</strong> <span id="provinceText"></span></p>
                             <p><strong>Confidence:</strong> <span id="confidence"></span>%</p>
-                            <p><strong>Gate Status:</strong> <span id="gateStatus"></span></p>
+                            <div id="duplicateInfo" style="display:none; margin-top: 15px; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                <p style="margin: 0; color: #92400e; font-weight: 600;">🔄 ข้อมูลป้ายซ้ำ:</p>
+                                <p style="margin: 5px 0 0 0; color: #78350f; font-size: 14px;" id="duplicateDetails"></p>
+                            </div>
+                            <p style="margin-top: 15px;"><strong>Gate Status:</strong> <span id="gateStatus"></span></p>
                         </div>
                     </div>
 
@@ -441,7 +447,7 @@
                 <span style="color: #ef4444; font-size: 18px;">🔴</span>
                 <span style="font-weight: 600;">Real-time Updates</span>
             </div>
-            <button id="wsStatus" class="status-badge-btn disconnected" style="background: #ef4444; color: white; border: none; padding: 6px 16px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: default;">DISCONNECTED</button>
+            <button id="wsStatus" class="status-badge-btn disconnected">DISCONNECTED</button>
             <div id="realtimeLog" style="display: none;"></div>
         </div>
     </div>

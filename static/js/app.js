@@ -7,15 +7,8 @@ let totalPages = 1;
 const pageLimit = 20;
 let ws = null;
 let reconnectInterval = null;
-// Clear invalid session tokens on load
-let storedToken = localStorage.getItem('session_token');
-let sessionToken = storedToken || null;
+let sessionToken = localStorage.getItem('session_token') || null;
 let currentUser = null;
-
-// Clear session if server was restarted (token might be invalid)
-if (storedToken) {
-    // Will be validated in checkAuth()
-}
 
 // Camera state
 let cameraStream = null;
@@ -29,15 +22,22 @@ let droidcamURL = null;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Thai LPR App initializing...');
     
+    // Ensure main app is hidden initially
+    document.getElementById('mainApp').style.display = 'none';
+    
     // Check authentication
     checkAuth();
     
     // Setup event listeners
     setupEventListeners();
     
-    // Connect WebSocket (only if logged in)
+    // Connect WebSocket (only if authenticated)
     if (sessionToken) {
         connectWebSocket();
+    }
+    
+    // Load initial data (only if authenticated)
+    if (sessionToken) {
         loadRecords();
         loadStats();
     }
@@ -46,7 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== Authentication =====
 async function checkAuth() {
     if (!sessionToken) {
-        showLoginButton();
         showLoginModal();
         return;
     }
@@ -58,42 +57,23 @@ async function checkAuth() {
         if (data.success) {
             currentUser = data.user;
             updateUserUI();
-            // Connect WebSocket and load data after successful login
+            // Connect WebSocket and load data after successful auth
             connectWebSocket();
             loadRecords();
             loadStats();
         } else {
-            // Invalid token, clear it
-            localStorage.removeItem('session_token');
-            sessionToken = null;
-            showLoginButton();
             showLoginModal();
         }
     } catch (error) {
         console.error('Auth check failed:', error);
-        localStorage.removeItem('session_token');
-        sessionToken = null;
-        showLoginButton();
         showLoginModal();
     }
 }
 
-function showLoginButton() {
-    const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (loginBtn) loginBtn.style.display = 'inline-block';
-    if (logoutBtn) logoutBtn.style.display = 'none';
-}
-
 function updateUserUI() {
     if (currentUser) {
-        // Hide login page and show main app
-        hideLoginModal();
-        
         document.getElementById('username').textContent = currentUser.username;
         document.getElementById('logoutBtn').style.display = 'inline-block';
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) loginBtn.style.display = 'none';
         
         // Show/hide UI based on role
         if (currentUser.role === 'admin') {
@@ -120,10 +100,10 @@ function updateUserUI() {
             document.getElementById('fileInputAdmin').style.display = 'none';
             document.getElementById('fileInput').style.display = 'block';
             
-            // Allow users to upload both images and videos
+            // Make file input accept only images for users
             const userInput = document.getElementById('fileInput');
             if (userInput) {
-                userInput.accept = 'image/*,video/*';
+                userInput.accept = 'image/*';
             }
         }
         
@@ -133,7 +113,6 @@ function updateUserUI() {
 
 function showLoginModal() {
     document.getElementById('loginPage').classList.add('active');
-    document.getElementById('registerPage').classList.remove('active');
     document.getElementById('mainApp').style.display = 'none';
 }
 
@@ -141,21 +120,6 @@ function hideLoginModal() {
     document.getElementById('loginPage').classList.remove('active');
     document.getElementById('registerPage').classList.remove('active');
     document.getElementById('mainApp').style.display = 'block';
-}
-
-function showRegisterPage() {
-    document.getElementById('registerPage').classList.add('active');
-    document.getElementById('loginPage').classList.remove('active');
-    document.getElementById('mainApp').style.display = 'none';
-}
-
-function togglePassword(inputId) {
-    const input = document.getElementById(inputId);
-    if (input.type === 'password') {
-        input.type = 'text';
-    } else {
-        input.type = 'password';
-    }
 }
 
 // ===== Event Listeners =====
@@ -192,12 +156,10 @@ function setupEventListeners() {
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
-        const activeInput = (currentUser && currentUser.role === 'admin') ? fileInputAdmin : fileInput;
-        if (activeInput && e.dataTransfer.files.length > 0) {
-            activeInput.files = e.dataTransfer.files;
-            // Create a synthetic event to pass to handleFileSelect
-            const syntheticEvent = { target: activeInput };
-            handleFileSelect(syntheticEvent);
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect();
         }
     });
     
@@ -273,11 +235,13 @@ function setupEventListeners() {
     document.getElementById('logoutBtn')?.addEventListener('click', handleLogout);
     document.getElementById('showRegister')?.addEventListener('click', (e) => {
         e.preventDefault();
-        showRegisterPage();
+        document.getElementById('loginPage').classList.remove('active');
+        document.getElementById('registerPage').classList.add('active');
     });
     document.getElementById('showLogin')?.addEventListener('click', (e) => {
         e.preventDefault();
-        showLoginModal();
+        document.getElementById('registerPage').classList.remove('active');
+        document.getElementById('loginPage').classList.add('active');
     });
 }
 
@@ -337,12 +301,10 @@ async function startCamera() {
         document.getElementById('cameraSection').style.display = 'block';
         document.getElementById('uploadArea').style.display = 'none';
         
-        // Wait a bit before starting auto-capture to ensure camera is ready
-        setTimeout(() => {
-            // Start auto-capture
-            startAutoCapture();
-            showNotification('Camera started! Detecting plates every 2 seconds...', 'success');
-        }, 1000);
+        // Start auto-capture
+        startAutoCapture();
+        
+        showNotification('Camera started! Detecting plates...', 'success');
         
     } catch (error) {
         console.error('Camera error:', error);
@@ -367,22 +329,8 @@ async function startWebRTCCamera() {
     
     if (videoPreview) {
         videoPreview.srcObject = cameraStream;
-        await videoPreview.play();
+        videoPreview.play();
         videoPreview.style.display = 'block';
-        
-        // Wait for video to be ready before starting detection
-        return new Promise((resolve) => {
-            videoPreview.addEventListener('loadedmetadata', () => {
-                console.log('Video ready. Dimensions:', videoPreview.videoWidth, 'x', videoPreview.videoHeight);
-                resolve();
-            }, { once: true });
-            
-            // Fallback timeout
-            setTimeout(() => {
-                console.log('Video metadata timeout, proceeding anyway...');
-                resolve();
-            }, 2000);
-        });
     }
     
     if (droidcamPreview) {
@@ -479,11 +427,8 @@ function stopCamera() {
 
 function startAutoCapture() {
     captureInterval = setInterval(async () => {
-        if (isCameraActive) {
-            // For WebRTC: check cameraStream, for DroidCam: check droidcamURL
-            if ((cameraSource === 'webrtc' && cameraStream) || (cameraSource === 'droidcam' && droidcamURL)) {
-                await captureAndProcess();
-            }
+        if (isCameraActive && cameraStream) {
+            await captureAndProcess();
         }
     }, CAMERA_CAPTURE_INTERVAL);
 }
@@ -504,14 +449,7 @@ async function captureAndProcess() {
 
 async function processWebRTCFrame() {
     const video = document.getElementById('cameraPreview');
-    if (!video) {
-        console.warn('Video element not found');
-        return;
-    }
-    
-    // Wait for video to be ready
-    if (video.readyState < video.HAVE_CURRENT_DATA || video.videoWidth === 0 || video.videoHeight === 0) {
-        console.log('Video not ready yet, waiting...');
+    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
         return;
     }
     
@@ -524,67 +462,30 @@ async function processWebRTCFrame() {
     
     // Convert to blob
     canvas.toBlob(async (blob) => {
-        if (!blob) {
-            console.warn('Failed to create blob from canvas');
-            return;
-        }
-        
-        // Send to API - ใช้ model จับและอ่านป้ายทะเบียน
-        const formData = new FormData();
-        formData.append('file', blob, 'camera_capture.jpg');
-        
-        // Add session token for user identification
-        if (sessionToken) {
-            formData.append('session_token', sessionToken);
-        }
-        
-        try {
-            console.log('Sending frame to /detect API...');
-            const response = await fetch('/detect', {
-                method: 'POST',
-                body: formData
-            });
+        if (blob) {
+            // Send to API
+            const formData = new FormData();
+            formData.append('file', blob, 'camera_capture.jpg');
             
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                console.error('Detection API error:', errorData);
-                showNotification('Detection failed: ' + (errorData.detail || 'Unknown error'), 'error');
-                return;
+            try {
+                const response = await fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.plate_text) {
+                    // Show detection in UI
+                    showCameraDetection(result);
+                    
+                    // Highlight on video (optional)
+                    highlightDetection(video, ctx);
+                }
+                
+            } catch (error) {
+                console.error('Detection error:', error);
             }
-            
-            const result = await response.json();
-            console.log('Detection result:', result);
-            
-            // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
-            if (result.plate_text && result.plate_text.length >= 2) {
-                // Show detection in UI
-                showCameraDetection(result);
-                
-                // Highlight on video (optional)
-                highlightDetection(video, ctx);
-                
-                // Refresh records if on records tab
-                const recordsTab = document.getElementById('records');
-                if (recordsTab && recordsTab.classList.contains('active')) {
-                    loadRecords();
-                }
-                
-                // Refresh plate status if admin
-                if (currentUser && currentUser.role === 'admin') {
-                    loadPlateStatus();
-                }
-            } else {
-                // No plate detected, but still log for debugging
-                console.log('No plate detected in frame (plate_text:', result.plate_text, ')');
-                // Show debug info in console
-                if (result.confidence !== undefined) {
-                    console.log('Detection attempted but no valid plate text found. Confidence:', result.confidence);
-                }
-            }
-            
-        } catch (error) {
-            console.error('Detection error:', error);
-            showNotification('Detection error: ' + error.message, 'error');
         }
     }, 'image/jpeg', 0.8);
 }
@@ -592,24 +493,12 @@ async function processWebRTCFrame() {
 async function processDroidcamFrame() {
     // For DroidCam, we send the URL to backend instead of capturing frame
     // Backend will fetch the frame from the IP camera using cv2.VideoCapture
-    // แล้วใช้ model จับและอ่านป้ายทะเบียน
-    
-    if (!droidcamURL) {
-        console.warn('DroidCam URL not set');
-        return;
-    }
     
     // Use the base URL (no timestamp needed for MJPEG stream)
     try {
         const formData = new FormData();
         formData.append('image_url', droidcamURL);
         
-        // Add session token for user identification
-        if (sessionToken) {
-            formData.append('session_token', sessionToken);
-        }
-        
-        console.log('Sending DroidCam URL to /detect API:', droidcamURL);
         const response = await fetch('/detect', {
             method: 'POST',
             body: formData
@@ -618,15 +507,12 @@ async function processDroidcamFrame() {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
             console.error('Detection API error:', errorData);
-            showNotification('Detection failed: ' + (errorData.detail || 'Unknown error'), 'error');
             return;
         }
         
         const result = await response.json();
-        console.log('DroidCam detection result:', result);
         
-        // แสดงผลลัพธ์เมื่อเจอป้าย (ใช้ model จับและอ่านแล้ว)
-        if (result.plate_text && result.plate_text.length >= 2) {
+        if (result.plate_text) {
             // Show detection in UI
             showCameraDetection(result);
             
@@ -634,24 +520,6 @@ async function processDroidcamFrame() {
             const droidcamPreview = document.getElementById('droidcamPreview');
             if (droidcamPreview) {
                 highlightDetection(droidcamPreview, null);
-            }
-            
-            // Refresh records if on records tab
-            const recordsTab = document.getElementById('records');
-            if (recordsTab && recordsTab.classList.contains('active')) {
-                loadRecords();
-            }
-            
-            // Refresh plate status if admin
-            if (currentUser && currentUser.role === 'admin') {
-                loadPlateStatus();
-            }
-        } else {
-            // No plate detected, but still log for debugging
-            console.log('No plate detected in DroidCam frame (plate_text:', result.plate_text, ')');
-            // Show debug info in console
-            if (result.confidence !== undefined) {
-                console.log('Detection attempted but no valid plate text found. Confidence:', result.confidence);
             }
         }
         
@@ -667,47 +535,23 @@ function showCameraDetection(result) {
     
     const detectionCard = document.createElement('div');
     detectionCard.className = 'camera-detection-card';
-    
-    // Show plate status (new or duplicate)
-    const statusBadge = result.is_new_plate 
-        ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">🆕 NEW</span>'
-        : `<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 8px;">🔄 DUPLICATE (${result.seen_count || 1}x)</span>`;
-    
     detectionCard.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-            <div class="detection-time" style="font-size: 11px; color: #6b7280;">${new Date().toLocaleTimeString('th-TH')}</div>
-            ${statusBadge}
-        </div>
-        <div class="detection-plate" style="font-weight: bold; font-size: 18px; color: #1e3a8a; margin: 5px 0;">${result.plate_text || 'N/A'}</div>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="detection-confidence" style="color: #64748b; font-size: 12px;">Confidence: ${result.confidence ? (result.confidence * 100).toFixed(1) + '%' : 'N/A'}</div>
-            ${result.plate_image ? `<img src="${result.plate_image}" style="width: 60px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; cursor: pointer;" onclick="showImageModal('${result.plate_image}')" alt="Plate">` : ''}
-        </div>
-        ${(currentUser && currentUser.role === 'admin' && result.duplicate_records && result.duplicate_records.length > 0) ? `
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280;">
-                🔄 ซ้ำกับ ${result.duplicate_records.length} รายการ
-            </div>
-        ` : ''}
+        <div class="detection-time">${new Date().toLocaleTimeString()}</div>
+        <div class="detection-plate">${result.plate_text || 'N/A'}</div>
+        <div class="detection-province">${result.province_text || ''}</div>
+        <div class="detection-confidence">${(result.confidence * 100).toFixed(1)}%</div>
     `;
     
     // Add to top
     detectionDiv.insertBefore(detectionCard, detectionDiv.firstChild);
     
-    // Keep only last 20 detections
-    while (detectionDiv.children.length > 20) {
+    // Keep only last 10 detections
+    while (detectionDiv.children.length > 10) {
         detectionDiv.removeChild(detectionDiv.lastChild);
     }
     
     // Flash effect
     detectionCard.style.animation = 'flash 0.5s ease-out';
-    
-    // Show notification
-    if (result.plate_text) {
-        const message = result.is_new_plate 
-            ? `🆕 ป้ายใหม่: ${result.plate_text}` 
-            : `🔄 ป้ายซ้ำ: ${result.plate_text} (เจอแล้ว ${result.seen_count || 1} ครั้ง)`;
-        showNotification(message, result.is_new_plate ? 'success' : 'info');
-    }
 }
 
 function highlightDetection(element, ctx) {
@@ -723,117 +567,137 @@ function highlightDetection(element, ctx) {
 }
 
 // ===== File Upload =====
-function handleFileSelect(e) {
+function handleFileSelect() {
     // Get the active file input (admin or user)
-    const activeInput = e?.target || ((currentUser && currentUser.role === 'admin' && document.getElementById('fileInputAdmin')) 
+    const activeInput = (currentUser && currentUser.role === 'admin' && document.getElementById('fileInputAdmin')) 
         ? document.getElementById('fileInputAdmin') 
-        : document.getElementById('fileInput'));
+        : document.getElementById('fileInput');
     
-    const file = activeInput?.files?.[0];
+    const file = activeInput?.files[0];
     
-    if (!file) {
-        // Clear preview if no file
-        const preview = document.getElementById('preview');
-        if (preview) preview.style.display = 'none';
-        return;
-    }
+    if (!file) return;
     
-    // Show preview immediately
+    // Show preview
     const preview = document.getElementById('preview');
     const imagePreview = document.getElementById('imagePreview');
     const videoPreview = document.getElementById('videoPreview');
     const videoPlayerSection = document.getElementById('videoPlayerSection');
     const videoPlayer = document.getElementById('videoPlayer');
-    const uploadBtn = document.getElementById('uploadBtn');
     
-    // Always show preview section
-    if (preview) preview.style.display = 'block';
-    
-    // Show file name
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const uploadText = document.getElementById('uploadText');
-    if (fileInfo && fileName) {
-        fileName.textContent = `📄 ${file.name}`;
-        fileInfo.style.display = 'block';
-    }
-    if (uploadText) {
-        uploadText.textContent = '📁 Click to select or drag & drop file here';
-    }
+    preview.style.display = 'block';
     
     if (file.type.startsWith('image/')) {
-        // Show image preview
-        if (imagePreview) {
-            // Revoke old URL if exists
-            if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
-                URL.revokeObjectURL(imagePreview.src);
-            }
-            imagePreview.src = URL.createObjectURL(file);
-            imagePreview.style.display = 'block';
-            imagePreview.onload = () => {
-                // Smooth animation
-                imagePreview.style.opacity = '0';
-                imagePreview.style.transition = 'opacity 0.3s ease';
-                setTimeout(() => {
-                    imagePreview.style.opacity = '1';
-                }, 10);
-            };
-        }
-        if (videoPreview) videoPreview.style.display = 'none';
+        imagePreview.src = URL.createObjectURL(file);
+        imagePreview.style.display = 'block';
+        videoPreview.style.display = 'none';
         if (videoPlayerSection) videoPlayerSection.style.display = 'none';
         
         // Show upload button for images
-        if (uploadBtn) uploadBtn.style.display = 'inline-block';
+        document.getElementById('uploadBtn').style.display = 'inline-block';
+        document.getElementById('uploadBtn').textContent = '🚀 Process Image';
         
-    } else if (file.type.startsWith('video/')) {
-        // Video playback (both user and admin)
+    } else if (file.type.startsWith('video/') && currentUser && currentUser.role === 'admin') {
+        // Admin only: Show video preview and upload button
         const videoURL = URL.createObjectURL(file);
         
-        // For admin: Show video player only (hide preview section completely to avoid duplicate)
-        if (currentUser && currentUser.role === 'admin' && videoPlayerSection) {
-            videoPlayerSection.style.display = 'block';
-            if (videoPlayer) {
-                // Revoke old URL if exists
-                if (videoPlayer.src && videoPlayer.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(videoPlayer.src);
-                }
-                videoPlayer.src = videoURL;
-                
-                // Auto-play video when loaded
-                videoPlayer.onloadedmetadata = () => {
-                    videoPlayer.play().catch(e => {
-                        console.log('Auto-play prevented:', e);
-                    });
-                };
-            }
-            // Hide preview section completely for admin (use video player instead)
-            if (videoPreview) videoPreview.style.display = 'none';
-            if (preview) preview.style.display = 'none';
-        } else {
-            // For regular users: Show video preview only
-            if (videoPreview) {
-                // Revoke old URL if exists
-                if (videoPreview.src && videoPreview.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(videoPreview.src);
-                }
-                videoPreview.src = videoURL;
-                videoPreview.style.display = 'block';
-            }
-            if (videoPlayerSection) videoPlayerSection.style.display = 'none';
+        console.log('Selected video file:', file.name, file.type, file.size);
+        
+        // Ensure preview section is visible
+        if (preview) {
+            preview.style.display = 'block';
+            console.log('Preview section displayed');
         }
         
-        if (imagePreview) imagePreview.style.display = 'none';
+        // Hide image preview and video player section
+        imagePreview.style.display = 'none';
+        if (videoPlayerSection) {
+            videoPlayerSection.style.display = 'none';
+        }
         
-        // Show upload button for videos (to process the entire video)
-        if (uploadBtn) uploadBtn.style.display = 'inline-block';
+        // Show video preview
+        if (videoPreview) {
+            console.log('Setting video preview src:', videoURL);
+            videoPreview.src = videoURL;
+            videoPreview.style.display = 'block';
+            videoPreview.style.setProperty('display', 'block', 'important');
+            
+            // Ensure video loads
+            videoPreview.onloadedmetadata = () => {
+                console.log('✅ Video metadata loaded:', videoPreview.videoWidth, 'x', videoPreview.videoHeight);
+                console.log('Video duration:', videoPreview.duration, 'seconds');
+            };
+            
+            videoPreview.oncanplay = () => {
+                console.log('✅ Video can play');
+            };
+            
+            videoPreview.onerror = (e) => {
+                console.error('❌ Video load error:', e, videoPreview.error);
+                showNotification('Failed to load video preview: ' + (videoPreview.error?.message || 'Unknown error'), 'error');
+            };
+            
+            // Try to load video
+            videoPreview.load();
+        } else {
+            console.error('videoPreview element not found!');
+        }
+        
+        // Show upload button for videos - user can click to process
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) {
+            uploadBtn.style.display = 'inline-block';
+            uploadBtn.textContent = '🚀 Process Video';
+        }
+        
+    } else if (file.type.startsWith('video/')) {
+        // Regular user: just show preview
+        const videoURL = URL.createObjectURL(file);
+        
+        console.log('Selected video file (user):', file.name, file.type, file.size);
+        
+        // Ensure preview section is visible
+        if (preview) {
+            preview.style.display = 'block';
+        }
+        
+        // Hide image preview
+        imagePreview.style.display = 'none';
+        if (videoPlayerSection) videoPlayerSection.style.display = 'none';
+        
+        // Show video preview
+        if (videoPreview) {
+            console.log('Setting video preview src:', videoURL);
+            videoPreview.src = videoURL;
+            videoPreview.style.display = 'block';
+            videoPreview.style.setProperty('display', 'block', 'important');
+            
+            // Ensure video loads
+            videoPreview.onloadedmetadata = () => {
+                console.log('✅ Video metadata loaded:', videoPreview.videoWidth, 'x', videoPreview.videoHeight);
+            };
+            
+            videoPreview.oncanplay = () => {
+                console.log('✅ Video can play');
+            };
+            
+            videoPreview.onerror = (e) => {
+                console.error('❌ Video load error:', e, videoPreview.error);
+                showNotification('Failed to load video preview: ' + (videoPreview.error?.message || 'Unknown error'), 'error');
+            };
+            
+            // Try to load video
+            videoPreview.load();
+        }
+        
+        // Users can't process videos
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) {
+            uploadBtn.style.display = 'none';
+        }
     }
     
     // Hide result
-    const result = document.getElementById('result');
-    if (result) result.style.display = 'none';
-    
-    // Show notification
-    showNotification(`File selected: ${file.name}`, 'info');
+    document.getElementById('result').style.display = 'none';
 }
 
 // Video detection state
@@ -925,6 +789,7 @@ function showVideoDetection(result, container, timestamp) {
     detectionDiv.innerHTML = `
         ${statusBadge}
         <div style="font-weight: bold; margin-top: 5px; font-size: 16px;">${result.plate_text || 'N/A'}</div>
+        <div style="color: #6b7280; font-size: 14px;">${result.province_text || ''}</div>
         <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
             Time: ${timeFormatted} | Confidence: ${((result.confidence || 0) * 100).toFixed(1)}%
         </div>
@@ -957,38 +822,10 @@ async function processUpload() {
         return;
     }
     
-    // Validate file type (images or videos)
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        showNotification('Please upload an image or video file', 'error');
+    // Users can only upload images
+    if (currentUser && currentUser.role !== 'admin' && !file.type.startsWith('image/')) {
+        showNotification('Users can only upload image files', 'error');
         return;
-    }
-    
-    // For video files and admin: Start playing video immediately when Process is clicked
-    if (file.type.startsWith('video/') && currentUser && currentUser.role === 'admin') {
-        const videoPlayer = document.getElementById('videoPlayer');
-        if (videoPlayer && videoPlayer.src) {
-            // Reset video to start
-            videoPlayer.currentTime = 0;
-            // Play video immediately (synchronized with processing)
-            videoPlayer.play().catch(e => {
-                console.log('Auto-play prevented:', e);
-            });
-            // Start detection if not already started
-            if (!videoDetectionActive) {
-                startVideoDetection(videoPlayer);
-            }
-        }
-    }
-    
-    // For regular users with video: Also play video when Process is clicked
-    if (file.type.startsWith('video/') && (!currentUser || currentUser.role !== 'admin')) {
-        const videoPreview = document.getElementById('videoPreview');
-        if (videoPreview && videoPreview.src) {
-            videoPreview.currentTime = 0;
-            videoPreview.play().catch(e => {
-                console.log('Auto-play prevented:', e);
-            });
-        }
     }
     
     // Show loading
@@ -999,14 +836,8 @@ async function processUpload() {
         const formData = new FormData();
         formData.append('file', file);
         
-        // Add session token for user identification
-        if (sessionToken) {
-            formData.append('session_token', sessionToken);
-        }
-        
-        // Choose endpoint based on file type
-        // Use /detect-video for videos, /detect for images
-        const endpoint = file.type.startsWith('video/') 
+        // Choose endpoint based on file type (only for admin)
+        const endpoint = (currentUser && currentUser.role === 'admin' && file.type.startsWith('video/')) 
             ? '/detect-video' 
             : '/detect';
         
@@ -1015,12 +846,23 @@ async function processUpload() {
             body: formData
         });
         
+        // Check if response is ok
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('Response error:', response.status, errorText);
+            throw new Error(`Server error: ${response.status} - ${errorText.substring(0, 100)}`);
         }
         
-        const result = await response.json();
+        // Parse JSON response
+        let result;
+        try {
+            const responseText = await response.text();
+            console.log('Response text:', responseText.substring(0, 200)); // Debug log
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            throw new Error('Invalid JSON response from server. Please check server logs.');
+        }
         
         // Hide loading
         document.getElementById('loading').style.display = 'none';
@@ -1040,7 +882,8 @@ async function processUpload() {
     } catch (error) {
         console.error('Upload error:', error);
         document.getElementById('loading').style.display = 'none';
-        showNotification('Processing failed: ' + error.message, 'error');
+        const errorMsg = error.message || 'Unknown error occurred';
+        showNotification('Processing failed: ' + errorMsg, 'error');
     }
 }
 
@@ -1049,187 +892,128 @@ function showImageResult(result) {
     resultDiv.style.display = 'block';
     
     document.getElementById('plateText').textContent = result.plate_text || 'N/A';
+    document.getElementById('provinceText').textContent = result.province_text || 'N/A';
     document.getElementById('confidence').textContent = result.confidence 
         ? (result.confidence * 100).toFixed(2) 
         : 'N/A';
     
-    // Show plate status (new or duplicate) for admin only
-    const gateStatusEl = document.getElementById('gateStatus');
-    if (gateStatusEl) {
-        if (currentUser && currentUser.role === 'admin') {
-            // Admin: Show plate status (new or duplicate)
-            if (result.is_new_plate) {
-                gateStatusEl.innerHTML = '<span style="color: #10b981;">🆕 ป้ายใหม่</span>';
-            } else {
-                gateStatusEl.innerHTML = `<span style="color: #f59e0b;">🔄 ป้ายซ้ำ (เจอแล้ว ${result.seen_count || 1} ครั้ง)</span>`;
-            }
+    // Show plate status badge
+    const statusBadgeEl = document.getElementById('plateStatusBadge');
+    if (statusBadgeEl) {
+        if (result.is_new_plate) {
+            statusBadgeEl.innerHTML = '<span style="background: #10b981; color: white; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">🆕 ป้ายใหม่ (First Time)</span>';
+            statusBadgeEl.style.marginBottom = '15px';
         } else {
-            // User: Hide gate status (user cannot control gate)
-            gateStatusEl.style.display = 'none';
+            statusBadgeEl.innerHTML = `<span style="background: #f59e0b; color: white; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">🔄 ป้ายซ้ำ (เจอแล้ว ${result.seen_count || 1} ครั้ง)</span>`;
+            statusBadgeEl.style.marginBottom = '15px';
         }
     }
     
-    // Show duplicate records if any (only for admin)
-    if (currentUser && currentUser.role === 'admin' && result.duplicate_records && result.duplicate_records.length > 0) {
-        showDuplicateRecords(result.duplicate_records, resultDiv);
+    // Show duplicate info if it's a duplicate
+    const duplicateInfoEl = document.getElementById('duplicateInfo');
+    const duplicateDetailsEl = document.getElementById('duplicateDetails');
+    if (duplicateInfoEl && duplicateDetailsEl) {
+        if (!result.is_new_plate) {
+            // Try to show detailed duplicate info
+            if (result.first_seen_info && result.first_seen_info.first_seen_at) {
+                try {
+                    const firstSeenDate = new Date(result.first_seen_info.first_seen_at).toLocaleString('th-TH', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    let details = `ป้ายนี้เจอครั้งแรกเมื่อ: <strong>${firstSeenDate}</strong>`;
+                    
+                    if (result.first_seen_info.id) {
+                        details += `<br>📋 Record ID ครั้งแรก: <strong>#${result.first_seen_info.id}</strong>`;
+                    }
+                    
+                    if (result.first_seen_info.first_seen_confidence !== null && result.first_seen_info.first_seen_confidence !== undefined) {
+                        details += `<br>🎯 Confidence ครั้งแรก: <strong>${(result.first_seen_info.first_seen_confidence * 100).toFixed(1)}%</strong>`;
+                    }
+                    
+                    duplicateDetailsEl.innerHTML = details;
+                    duplicateInfoEl.style.display = 'block';
+                } catch (dateError) {
+                    console.error('Error formatting date:', dateError);
+                    duplicateDetailsEl.innerHTML = `ป้ายนี้เจอแล้ว ${result.seen_count || 1} ครั้ง`;
+                    duplicateInfoEl.style.display = 'block';
+                }
+            } else if (result.first_seen_at) {
+                try {
+                    const firstSeenDate = new Date(result.first_seen_at).toLocaleString('th-TH', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    duplicateDetailsEl.innerHTML = `ป้ายนี้เจอครั้งแรกเมื่อ: <strong>${firstSeenDate}</strong><br>เจอแล้ว <strong>${result.seen_count || 1}</strong> ครั้ง`;
+                    duplicateInfoEl.style.display = 'block';
+                } catch (dateError) {
+                    console.error('Error formatting date:', dateError);
+                    duplicateDetailsEl.innerHTML = `ป้ายนี้เจอแล้ว ${result.seen_count || 1} ครั้ง`;
+                    duplicateInfoEl.style.display = 'block';
+                }
+            } else {
+                // Fallback: just show count
+                duplicateDetailsEl.innerHTML = `ป้ายนี้เจอแล้ว <strong>${result.seen_count || 1}</strong> ครั้ง`;
+                duplicateInfoEl.style.display = 'block';
+            }
+        } else {
+            duplicateInfoEl.style.display = 'none';
+        }
+    }
+    
+    // Update result card background color based on status
+    const resultCard = document.getElementById('resultCard');
+    if (resultCard) {
+        if (result.is_new_plate) {
+            resultCard.style.background = '#f0fdf4';
+            resultCard.style.borderLeft = '4px solid #10b981';
+        } else {
+            resultCard.style.background = '#fffbeb';
+            resultCard.style.borderLeft = '4px solid #f59e0b';
+        }
+    }
+    
+    // Show plate status (new or duplicate) for admin
+    const gateStatusEl = document.getElementById('gateStatus');
+    if (gateStatusEl && currentUser && currentUser.role === 'admin') {
+        if (result.is_new_plate) {
+            gateStatusEl.innerHTML = '<span style="color: #10b981;">🆕 ป้ายใหม่</span>';
+        } else {
+            gateStatusEl.innerHTML = `<span style="color: #f59e0b;">🔄 ป้ายซ้ำ (เจอแล้ว ${result.seen_count || 1} ครั้ง)</span>`;
+        }
+    } else if (gateStatusEl) {
+        gateStatusEl.textContent = result.gate_opened ? '✅ Opened' : '❌ Not Opened';
     }
     
     const message = result.is_new_plate 
         ? '🆕 Detection completed! New plate detected!' 
-        : `🔄 Detection completed! Duplicate plate. Found ${result.duplicate_records?.length || 0} duplicate record(s).`;
+        : `🔄 Detection completed! Duplicate plate (seen ${result.seen_count || 1} times).`;
     showNotification(message, result.is_new_plate ? 'success' : 'info');
-}
-
-function showDuplicateRecords(duplicateRecords, container) {
-    // Remove existing duplicate section if any
-    const existingSection = container.querySelector('.duplicate-records-section');
-    if (existingSection) {
-        existingSection.remove();
-    }
-    
-    const duplicateSection = document.createElement('div');
-    duplicateSection.className = 'duplicate-records-section';
-    duplicateSection.style.cssText = `
-        margin-top: 20px;
-        padding: 15px;
-        background: #fef3c7;
-        border-left: 4px solid #f59e0b;
-        border-radius: 8px;
-    `;
-    
-    duplicateSection.innerHTML = `
-        <h4 style="color: #92400e; margin-bottom: 10px; font-size: 16px;">
-            🔄 ป้ายซ้ำ (พบ ${duplicateRecords.length} รายการ)
-        </h4>
-        <div style="max-height: 300px; overflow-y: auto;">
-            ${duplicateRecords.map((dup, index) => `
-                <div style="display: flex; align-items: center; gap: 15px; padding: 10px; margin-bottom: 10px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #1e3a8a; margin-bottom: 5px;">
-                            รายการที่ ${index + 1} - ID: ${dup.id}
-                        </div>
-                        <div style="color: #64748b; font-size: 14px;">
-                            <div>ป้ายทะเบียน: <strong>${dup.plate_text || 'N/A'}</strong></div>
-                            <div>Confidence: ${dup.confidence ? (dup.confidence * 100).toFixed(1) + '%' : 'N/A'}</div>
-                            <div>วันที่บันทึก: ${dup.created_at ? new Date(dup.created_at).toLocaleString('th-TH') : 'N/A'}</div>
-                            ${dup.first_seen_at ? `<div>เจอครั้งแรก: ${new Date(dup.first_seen_at).toLocaleString('th-TH')}</div>` : ''}
-                        </div>
-                    </div>
-                    ${dup.plate_image ? `
-                        <img src="${dup.plate_image}" 
-                             style="width: 100px; height: 60px; object-fit: cover; border-radius: 6px; border: 2px solid #e5e7eb; cursor: pointer;" 
-                             onclick="showImageModal('${dup.plate_image}')"
-                             alt="Plate ${dup.id}">
-                    ` : '<div style="width: 100px; height: 60px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 12px;">No Image</div>'}
-                </div>
-            `).join('')}
-        </div>
-    `;
-    
-    container.appendChild(duplicateSection);
 }
 
 function showVideoResult(result) {
     const resultDiv = document.getElementById('result');
     resultDiv.style.display = 'block';
     
-    // Check if result has video-specific fields
-    if (result.frames_processed !== undefined) {
-        // Video processing result
-        const uniquePlates = result.unique_plates || [];
-        const framesProcessed = result.frames_processed || 0;
-        const recordsSaved = result.records_saved || 0;
-        const platesWithDetails = result.plates_with_details || [];
-        
-        // Build plates list with duplicate information
-        let platesListHTML = '';
-        if (platesWithDetails.length > 0) {
-            platesListHTML = platesWithDetails.map(plate => {
-                const statusBadge = plate.is_new_plate 
-                    ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">🆕 NEW</span>'
-                    : `<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">🔄 DUPLICATE (${plate.seen_count || 1}x)</span>`;
-                
-                let duplicateInfo = '';
-                // Only show duplicate info for admin users
-                if (currentUser && currentUser.role === 'admin' && plate.duplicate_records && plate.duplicate_records.length > 0) {
-                    duplicateInfo = `
-                        <div style="margin-top: 8px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 3px solid #f59e0b;">
-                            <div style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 6px;">
-                                🔄 ซ้ำกับ ${plate.duplicate_records.length} รายการ:
-                            </div>
-                            <div style="font-size: 11px; color: #78350f;">
-                                ${plate.duplicate_records.map((dup, idx) => 
-                                    `• ID ${dup.id}: ${dup.plate_text || 'N/A'} (${dup.created_at ? new Date(dup.created_at).toLocaleDateString('th-TH') : 'N/A'})`
-                                ).join('<br>')}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                return `
-                    <div style="padding: 12px; margin-bottom: 10px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="flex: 1;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <strong style="color: #1e3a8a; font-size: 16px;">${plate.plate_text || 'N/A'}</strong>
-                                    ${statusBadge}
-                                </div>
-                                <div style="color: #64748b; font-size: 12px; margin-top: 4px;">
-                                    Confidence: ${plate.confidence ? (plate.confidence * 100).toFixed(1) + '%' : 'N/A'}
-                                </div>
-                                ${duplicateInfo}
-                            </div>
-                            ${plate.plate_image ? `
-                                <img src="${plate.plate_image}" 
-                                     style="width: 80px; height: 50px; object-fit: cover; border-radius: 6px; border: 2px solid #e5e7eb; cursor: pointer; margin-left: 10px;" 
-                                     onclick="showImageModal('${plate.plate_image}')"
-                                     alt="Plate ${plate.plate_text}">
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        } else if (uniquePlates.length > 0) {
-            // Fallback to simple list if details not available
-            platesListHTML = uniquePlates.map(plate => 
-                `<li style="margin: 5px 0; padding: 8px; background: white; border-radius: 6px;">${plate}</li>`
-            ).join('');
-        }
-        
-        resultDiv.innerHTML = `
-            <h3 style="color: #1e3a8a; font-size: 20px; font-weight: 600; margin-bottom: 15px;">📹 Video Processing Complete</h3>
-            <div class="result-card" style="background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div style="padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #3b82f6;">
-                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Frames Processed</div>
-                        <div style="font-size: 24px; font-weight: 700; color: #1e3a8a;">${framesProcessed}</div>
-                    </div>
-                    <div style="padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #10b981;">
-                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Unique Plates</div>
-                        <div style="font-size: 24px; font-weight: 700; color: #1e3a8a;">${uniquePlates.length}</div>
-                    </div>
-                    <div style="padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #f59e0b;">
-                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Records Saved</div>
-                        <div style="font-size: 24px; font-weight: 700; color: #1e3a8a;">${recordsSaved}</div>
-                    </div>
-                </div>
-                ${platesWithDetails.length > 0 || uniquePlates.length > 0 ? `
-                    <div style="margin-top: 20px;">
-                        <strong style="color: #1e3a8a; font-size: 16px; display: block; margin-bottom: 12px;">Detected Plates:</strong>
-                        <div style="max-height: 400px; overflow-y: auto;">
-                            ${platesListHTML}
-                        </div>
-                    </div>
-                ` : '<p style="margin: 10px 0; color: #64748b;">No license plates detected in video.</p>'}
-            </div>
-        `;
-    } else {
-        // Single frame result (fallback)
-        document.getElementById('plateText').textContent = result.plate_text || 'N/A';
-        document.getElementById('confidence').textContent = result.confidence 
-            ? (result.confidence * 100).toFixed(2) + ' %' 
-            : 'N/A';
-    }
+    resultDiv.innerHTML = `
+        <h3>Video Processing Complete</h3>
+        <div class="result-card">
+            <p><strong>Frames Processed:</strong> ${result.frames_processed}</p>
+            <p><strong>Unique Plates:</strong> ${result.unique_plates.length}</p>
+            <p><strong>Records Saved:</strong> ${result.records_saved}</p>
+            <p><strong>Detected Plates:</strong></p>
+            <ul style="margin-left: 20px;">
+                ${result.unique_plates.map(plate => `<li>${plate}</li>`).join('')}
+            </ul>
+        </div>
+    `;
     
     showNotification('Video processing completed!', 'success');
 }
@@ -1240,10 +1024,6 @@ async function loadRecords(searchQuery = '') {
         let url = `/api/records?page=${currentPage}&limit=${pageLimit}`;
         if (searchQuery) {
             url += `&search=${encodeURIComponent(searchQuery)}`;
-        }
-        // Add session token for user filtering
-        if (sessionToken) {
-            url += `&session_token=${encodeURIComponent(sessionToken)}`;
         }
         
         const response = await fetch(url);
@@ -1279,11 +1059,11 @@ function displayRecords(records) {
             <td>${record.id}</td>
             <td class="plate-image-cell">
                 ${record.plate_image 
-                    ? `<img src="${record.plate_image}" class="plate-thumbnail" alt="Plate ${record.plate_text || record.id}" onclick="showImageModal('${record.plate_image}')" onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML='<span style=\\'color: #9ca3af; font-size: 12px;\\'>No Image</span>';" loading="lazy">
-                    `
-                    : '<span style="color: #9ca3af; font-size: 12px;">No Image</span>'}
+                    ? `<img src="${record.plate_image}" class="plate-thumbnail" alt="Plate" onclick="showImageModal('${record.plate_image}')">`
+                    : 'N/A'}
             </td>
             <td><strong>${record.plate_text || 'N/A'}</strong></td>
+            <td>${record.province_text || 'N/A'}</td>
             <td>${record.confidence ? (record.confidence * 100).toFixed(1) + '%' : 'N/A'}</td>
             <td>${record.created_at ? new Date(record.created_at).toLocaleString('th-TH') : 'N/A'}</td>
         </tr>
@@ -1293,12 +1073,7 @@ function displayRecords(records) {
 // ===== Admin Functions =====
 async function loadStats() {
     try {
-        let url = '/api/stats';
-        // Add session token for user filtering
-        if (sessionToken) {
-            url += `?session_token=${encodeURIComponent(sessionToken)}`;
-        }
-        const response = await fetch(url);
+        const response = await fetch('/api/stats');
         const data = await response.json();
         
         document.getElementById('totalRecords').textContent = data.total_records || 0;
@@ -1332,6 +1107,7 @@ async function loadPlateStatus() {
                         <div style="display: flex; justify-content: space-between; align-items: start;">
                             <div style="flex: 1;">
                                 <div style="font-weight: bold; font-size: 18px; color: #0369a1;">${plate.plate_text || 'N/A'}</div>
+                                <div style="color: #6b7280; margin-top: 5px;">${plate.province_text || ''}</div>
                                 <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
                                     Confidence: ${((plate.confidence || 0) * 100).toFixed(1)}% | 
                                     ${plate.created_at ? new Date(plate.created_at).toLocaleString('th-TH') : ''}
@@ -1362,6 +1138,7 @@ async function loadPlateStatus() {
                                     </span>
                                 </div>
                                 <div style="font-weight: bold; font-size: 18px; color: #92400e; margin-top: 5px;">${plate.plate_text || 'N/A'}</div>
+                                <div style="color: #6b7280; margin-top: 5px;">${plate.province_text || ''}</div>
                                 <div style="color: #6b7280; font-size: 12px; margin-top: 5px;">
                                     Confidence: ${((plate.confidence || 0) * 100).toFixed(1)}% | 
                                     ${plate.created_at ? new Date(plate.created_at).toLocaleString('th-TH') : ''}
@@ -1388,18 +1165,11 @@ async function testGate() {
         const response = await fetch('/api/gate/test', { method: 'POST' });
         const result = await response.json();
         
-        if (response.ok) {
-            showNotification(result.message || 'Gate test command sent', 'success');
-        } else {
-            // Show error message from server
-            const errorMsg = result.detail || result.message || 'Gate test failed';
-            showNotification(`❌ ${errorMsg}`, 'error');
-            console.error('Gate test error:', result);
-        }
+        showNotification(result.message || 'Gate test command sent', 'success');
         
     } catch (error) {
         console.error('Gate test failed:', error);
-        showNotification(`❌ Failed to send gate command: ${error.message}`, 'error');
+        showNotification('Failed to send gate command', 'error');
     }
 }
 
@@ -1474,11 +1244,10 @@ function connectWebSocket() {
     
     ws.onopen = () => {
         console.log('✅ WebSocket connected');
-        const wsStatus = document.getElementById('wsStatus');
-        if (wsStatus) {
-            wsStatus.textContent = 'CONNECTED';
-            wsStatus.className = 'status-badge-btn connected';
-        }
+        const wsStatusEl = document.getElementById('wsStatus');
+        wsStatusEl.textContent = 'CONNECTED';
+        wsStatusEl.className = 'status-badge-btn connected';
+        wsStatusEl.style.background = ''; // ลบ inline style เพื่อให้ CSS ทำงาน
         clearInterval(reconnectInterval);
     };
     
@@ -1493,11 +1262,10 @@ function connectWebSocket() {
     
     ws.onclose = () => {
         console.log('❌ WebSocket disconnected');
-        const wsStatus = document.getElementById('wsStatus');
-        if (wsStatus) {
-            wsStatus.textContent = 'DISCONNECTED';
-            wsStatus.className = 'status-badge-btn disconnected';
-        }
+        const wsStatusEl = document.getElementById('wsStatus');
+        wsStatusEl.textContent = 'DISCONNECTED';
+        wsStatusEl.className = 'status-badge-btn disconnected';
+        wsStatusEl.style.background = ''; // ลบ inline style เพื่อให้ CSS ทำงาน
         
         // Auto-reconnect
         reconnectInterval = setInterval(connectWebSocket, 3000);
@@ -1506,19 +1274,44 @@ function connectWebSocket() {
 
 function handleWebSocketMessage(data) {
     if (data.type === 'detection') {
-        // Show real-time detection
-        addRealtimeLog(`🚗 ${data.plate_text || 'Unknown'} | ${(data.confidence * 100).toFixed(1)}%`);
+        // Show real-time detection with duplicate info
+        const plateStatus = data.is_new_plate ? '🆕 NEW' : `🔄 DUPLICATE (${data.seen_count || 1}x)`;
+        const confidenceStr = data.confidence ? `${(data.confidence * 100).toFixed(1)}%` : 'N/A';
+        addRealtimeLog(`🚗 ${data.plate_text || 'Unknown'} | ${data.province_text || ''} | ${confidenceStr} | ${plateStatus}`);
         
         // Refresh records if on records tab
         const recordsTab = document.getElementById('records');
         if (recordsTab && recordsTab.classList.contains('active')) {
             loadRecords();
         }
+        
+        // Refresh dashboard/board (admin tab) if active
+        const adminTab = document.getElementById('admin');
+        if (adminTab && adminTab.classList.contains('active')) {
+            loadStats();
+            loadPlateStatus();
+        }
+        
+        // Also refresh stats and plate status in background (for real-time updates)
+        if (currentUser && currentUser.role === 'admin') {
+            loadStats();
+            loadPlateStatus();
+        }
     }
     
     if (data.type === 'gate') {
-        addRealtimeLog(`🚪 Gate ${data.action}: ${data.plate_text || ''}`);
+        const gateStatus = data.action === 'opened' ? '✅ OPENED' : data.action === 'closed' ? '🔒 CLOSED' : '⚠️ ERROR';
+        const plateInfo = data.plate_text ? ` | Plate: ${data.plate_text}` : '';
+        const reasonInfo = data.reason ? ` | Reason: ${data.reason}` : '';
+        addRealtimeLog(`🚪 Gate ${gateStatus}${plateInfo}${reasonInfo}`);
         updateGateStatus(data.action === 'opened');
+        
+        // Show notification
+        if (data.action === 'opened') {
+            showNotification(`🚪 Gate opened for: ${data.plate_text || 'Unknown'}`, 'success');
+        } else if (data.action === 'error') {
+            showNotification(`⚠️ Gate error: ${data.error || 'Unknown error'}`, 'error');
+        }
     }
 }
 
@@ -1571,14 +1364,9 @@ async function handleLogin(e) {
             localStorage.setItem('session_token', sessionToken);
             currentUser = data.user;
             updateUserUI();
-            hideLoginModal();
             showNotification('Login successful!', 'success');
         } else {
-            const errorDiv = document.getElementById('loginError');
-            if (errorDiv) {
-                errorDiv.textContent = data.message;
-                errorDiv.style.display = 'block';
-            }
+            showError('loginError', data.message);
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -1614,20 +1402,13 @@ async function handleRegister(e) {
         const data = await response.json();
         
         if (data.success) {
-            const successDiv = document.getElementById('registerSuccess');
-            if (successDiv) {
-                successDiv.textContent = data.message;
-                successDiv.style.display = 'block';
-            }
+            showSuccess('registerSuccess', data.message);
             setTimeout(() => {
-                showLoginModal();
+                document.getElementById('registerPage').classList.remove('active');
+                document.getElementById('loginPage').classList.add('active');
             }, 2000);
         } else {
-            const errorDiv = document.getElementById('registerError');
-            if (errorDiv) {
-                errorDiv.textContent = data.message;
-                errorDiv.style.display = 'block';
-            }
+            showError('registerError', data.message);
         }
     } catch (error) {
         console.error('Register error:', error);
@@ -1637,23 +1418,15 @@ async function handleRegister(e) {
 
 async function handleLogout() {
     if (sessionToken) {
-        try {
-            const formData = new FormData();
-            formData.append('session_token', sessionToken);
-            
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-                body: formData
-            });
-        } catch (error) {
-            console.error('Logout error:', error);
-        }
+        const formData = new FormData();
+        formData.append('session_token', sessionToken);
+        
+        await fetch('/api/auth/logout', {
+            method: 'POST',
+            body: formData
+        });
     }
     
-    clearSession();
-}
-
-function clearSession() {
     localStorage.removeItem('session_token');
     sessionToken = null;
     currentUser = null;
@@ -1663,13 +1436,10 @@ function clearSession() {
         el.style.display = 'none';
     });
     
-    // Reset UI
-    document.getElementById('username').textContent = 'Guest';
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.style.display = 'none';
-    
-    showLoginButton();
+    // Hide main app and show login
+    document.getElementById('mainApp').style.display = 'none';
     showLoginModal();
+    showNotification('Logged out successfully', 'info');
 }
 
 // ===== Utility Functions =====
@@ -1725,108 +1495,33 @@ function showSuccess(elementId, message) {
 }
 
 function showImageModal(imageSrc) {
-    // Remove existing modal if any
-    const existingModal = document.getElementById('imageModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
     // Create modal to show full image
     const modal = document.createElement('div');
-    modal.id = 'imageModal';
     modal.style.cssText = `
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.95);
+        background: rgba(0,0,0,0.9);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 10000;
         cursor: pointer;
-        animation: fadeIn 0.3s ease;
-    `;
-    
-    const imgContainer = document.createElement('div');
-    imgContainer.style.cssText = `
-        position: relative;
-        max-width: 90%;
-        max-height: 90%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
     `;
     
     const img = document.createElement('img');
     img.src = imageSrc;
     img.style.cssText = `
-        max-width: 100%;
-        max-height: 90vh;
+        max-width: 90%;
+        max-height: 90%;
         border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        object-fit: contain;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     `;
-    img.onerror = () => {
-        imgContainer.innerHTML = `
-            <div style="color: white; text-align: center; padding: 40px;">
-                <p style="font-size: 18px; margin-bottom: 10px;">⚠️ ไม่สามารถโหลดภาพได้</p>
-                <p style="font-size: 14px; color: #9ca3af;">Image not found</p>
-            </div>
-        `;
-    };
     
-    const closeBtn = document.createElement('div');
-    closeBtn.innerHTML = '✕';
-    closeBtn.style.cssText = `
-        position: absolute;
-        top: -40px;
-        right: 0;
-        color: white;
-        font-size: 32px;
-        font-weight: bold;
-        cursor: pointer;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 50%;
-        transition: all 0.3s ease;
-    `;
-    closeBtn.onmouseover = () => {
-        closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-        closeBtn.style.transform = 'scale(1.1)';
-    };
-    closeBtn.onmouseout = () => {
-        closeBtn.style.background = 'rgba(255, 255, 255, 0.1)';
-        closeBtn.style.transform = 'scale(1)';
-    };
-    
-    imgContainer.appendChild(img);
-    imgContainer.appendChild(closeBtn);
-    modal.appendChild(imgContainer);
-    
-    // Close on click
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal || e.target === closeBtn) {
-            modal.style.animation = 'fadeOut 0.3s ease';
-            setTimeout(() => modal.remove(), 300);
-        }
-    });
-    
-    // Close on ESC key
-    const handleEsc = (e) => {
-        if (e.key === 'Escape') {
-            modal.style.animation = 'fadeOut 0.3s ease';
-            setTimeout(() => modal.remove(), 300);
-            document.removeEventListener('keydown', handleEsc);
-        }
-    };
-    document.addEventListener('keydown', handleEsc);
-    
+    modal.appendChild(img);
+    modal.addEventListener('click', () => modal.remove());
     document.body.appendChild(modal);
 }
 

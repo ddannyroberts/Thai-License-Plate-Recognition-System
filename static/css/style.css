@@ -1798,11 +1798,8 @@ table tbody tr:last-child td {
     }
 }
 
-/* Hide video preview for admin (use video player instead) */
-.admin-only ~ #preview .user-video-preview,
-.admin-only ~ #preview #videoPreview {
-    display: none !important;
-}
+/* Video preview is now available for both admin and users */
+/* Admin can use videoPreview to preview and then click Process button */
 
 /* Ensure video player is visible for admin */
 #videoPlayerSection.admin-only {
